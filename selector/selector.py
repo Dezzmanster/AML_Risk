@@ -29,6 +29,7 @@ class FeatureSelector(object):
     self.path = parameters['path_data']
     self.sep = parameters['sep']
     self.target = parameters['target']
+    self.id = parameters['id']
     self.num_features = parameters['num_features']
     self.n_jobs = parameters['n_jobs']
     self.output_file_name = parameters['output_file_name']
@@ -76,13 +77,14 @@ class FeatureSelector(object):
     """   
     columns = list(self.df.columns)
     columns.remove(self.target)
+    columns.remove(self.id)
     len_previous_columns = -1
     while len(columns) != len_previous_columns:
       logging.info(f"{len(columns)} was selected")
       len_previous_columns = len(columns)
       model = self.build_model(columns)
       columns = self.get_df_importance(model.feature_importances_, columns)
-    self.df = self.df[columns + [self.target]]
+    self.df = self.df[[self.id] + columns + [self.target]]
 
   @timeit
   def get_feature_by_shap(self):
@@ -91,6 +93,7 @@ class FeatureSelector(object):
     """
     columns = list(self.df.columns)
     columns.remove(self.target)
+    columns.remove(self.id)
     len_previous_columns = -1
     while len(columns) != len_previous_columns:
       logging.info(f"{len(columns)} was selected")
@@ -98,7 +101,7 @@ class FeatureSelector(object):
       model = self.build_model(columns)
       shap_values = shap.TreeExplainer(model).shap_values(self.df[columns])
       columns = self.get_df_importance(np.abs(shap_values).mean(0), columns)
-    self.df = self.df[columns + [self.target]]
+    self.df = self.df[[self.id] + columns + [self.target]]
 
   @timeit
   def one_factor_calculate_score(self):
@@ -108,6 +111,7 @@ class FeatureSelector(object):
     list_score = []
     columns = list(self.df.columns)
     columns.remove(self.target)
+    columns.remove(self.id)
     for column in columns:
       model = self.build_model([column])
       predict = model.predict_proba(self.df[[column]])[:, 1]
@@ -115,7 +119,7 @@ class FeatureSelector(object):
       list_score.append(score)
     df_scores = pd.DataFrame(list(zip(columns, list_score)), columns=['name', 'score'])
     df_scores.sort_values(by = 'score', ascending=False, inplace=True)
-    self.df = self.df[list(df_scores['name']) + [self.target]]
+    self.df = self.df[[self.id] + list(df_scores['name']) + [self.target]]
   
   @timeit
   def one_factor_selection(self):
@@ -128,7 +132,7 @@ class FeatureSelector(object):
     epsilon = 0.0001
     columns = list(self.df.columns)
     columns.remove(self.target)
-
+    columns.remove(self.id)
     model = self.build_model(columns)
     predict = model.predict_proba(self.df[columns])[:, 1]
     current_score = roc_auc_score(self.df[self.target], predict)
@@ -143,11 +147,11 @@ class FeatureSelector(object):
     columns = columns + [drop_column]
 
     if self.num_features != None:
-      self.df = self.df[columns[:self.num_features] + [self.target]]
+      self.df = self.df[[self.id] + columns[:self.num_features] + [self.target]]
       logging.info(f"{self.num_features} was selected")
       logging.info(f"Feature final size: {self.num_features}")
     else:
-      self.df = self.df[columns + [self.target]]
+      self.df = self.df[[self.id] + columns + [self.target]]
       logging.info(f"Feature final size: {len(columns)}")
     gc.collect()
     save_dataframe_to_csv(self.df, self.output_file_name, self.sep)
