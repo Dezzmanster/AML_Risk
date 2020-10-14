@@ -31,6 +31,7 @@ class FeatureSelector(object):
     self.target = parameters['target']
     self.id = parameters['id']
     self.num_features = parameters['num_features']
+    self.threshold = parameters['threshold']
     self.n_jobs = parameters['n_jobs']
     self.output_file_name = parameters['output_file_name']
     self.df = None
@@ -129,7 +130,6 @@ class FeatureSelector(object):
     """
     previous_score = -1.0
     current_score = 0.0
-    epsilon = 0.0001
     columns = list(self.df.columns)
     columns.remove(self.target)
     columns.remove(self.id)
@@ -137,7 +137,7 @@ class FeatureSelector(object):
     predict = model.predict_proba(self.df[columns])[:, 1]
     current_score = roc_auc_score(self.df[self.target], predict)
 
-    while current_score >= previous_score - epsilon:
+    while current_score >= previous_score - self.threshold:
       drop_column = columns.pop(-1)
       previous_score = current_score
       model = self.build_model(columns)
