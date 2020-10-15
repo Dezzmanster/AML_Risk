@@ -77,7 +77,7 @@ class FeatureGenerator(object):
             self.create_entityset()
             self.create_relations()
             self.plot_entityset()
-            self.feature_matrix_base_parallel()
+            self.get_all_feature_matrix()
             self.save_features_to_json()
         # одна таблица, создаем fm общий
         elif (len(self.tables.keys()) == 1) and not self.relations and not self.generate_selected_features:
@@ -85,7 +85,7 @@ class FeatureGenerator(object):
             self.create_dataframes()
             self.create_entityset()
             self.plot_entityset()
-            self.feature_matrix_base_parallel()
+            self.get_all_feature_matrix()
             self.save_features_to_json()
         # много таблиц, создаем fm только из отобранных фич
         elif (len(self.tables.keys()) > 1) and self.relations and self.generate_selected_features:
@@ -96,7 +96,7 @@ class FeatureGenerator(object):
             self.create_relations()
             self.plot_entityset()
             self.select_features()
-            self.selected_feature_matrix()
+            self.get_selected_feature_matrix()
         # одна таблица, создаем fm только из отобранных фич
         elif (len(self.tables.keys()) == 1) and not self.relations and self.generate_selected_features:
             logging.info(f"Work with one table and selected features")
@@ -104,7 +104,7 @@ class FeatureGenerator(object):
             self.create_entityset()
             self.plot_entityset()
             self.select_features()
-            self.selected_feature_matrix()
+            self.get_selected_feature_matrix()
 
     @timeit
     def create_dataframes(self):
@@ -219,7 +219,7 @@ class FeatureGenerator(object):
             logging.error(f"Can't plot entityset \n {ex}")
 
     @timeit
-    def feature_matrix_base_parallel(self):
+    def get_all_feature_matrix(self):
         """
         Make future matrix (DataFrame object) from EntitySet object and save result in csv file.
         """
@@ -240,6 +240,7 @@ class FeatureGenerator(object):
         logging.info(f"Feature matrix final size: {self.feature_matrix.shape}")
         gc.collect()
         save_dataframe_to_csv(self.feature_matrix, os.path.join(self.path, self.output_file_name), self.sep)
+        logging.info(f"Feature matrix is saved: {os.path.join(self.path, self.output_file_name)}")
 
     @timeit
     def save_features_to_json(self):
@@ -255,7 +256,7 @@ class FeatureGenerator(object):
                 self.selected_features.append(feature)
 
     @timeit
-    def selected_feature_matrix(self):
+    def get_selected_feature_matrix(self):
         """
         Make future matrix (DataFrame object) with selected features from EntitySet object and save result in csv file.
         """
@@ -269,3 +270,4 @@ class FeatureGenerator(object):
         )
         logging.info(f"Feature matrix final size: {self.feature_matrix.shape}")
         save_dataframe_to_csv(self.feature_matrix, os.path.join(self.path, self.output_file_name), self.sep)
+        logging.info(f"Feature matrix is saved: {os.path.join(self.path, self.output_file_name)}")
