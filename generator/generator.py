@@ -54,11 +54,57 @@ class FeatureGenerator(object):
         self.output_file_name = parameters['output_file_name']
         self.time_indecies = parameters['time_indecies']
         self.time_variables = parameters['time_variables']  # TODO заменить на обработку из файла Ани
+        self.feature_names_file = parameters['file_name_for_features']
+        self.generate_selected_features = parameters['generate_selected_features']
+        self.file_name_with_selected_features = parameters['file_with_selected_features']
+        self.selected_features = list()
 
         logging.info(f"Object {self} is created")
 
     def __repr__(self):
         return f"Generator(data='{self.path}', output_file='{self.output_file_name}', object_id={id(self)})"
+
+    @timeit
+    def __call__(self):
+        """
+        Combine and run all of class methods for getting featurematrix
+        """
+        # много таблиц, создаем fm общий
+        if (len(self.tables.keys()) > 1) and self.relations and not self.generate_selected_features:
+            logging.info(f"Work with many tables and all features")
+            self.create_dataframes()
+            self.check_cycles()
+            self.create_entityset()
+            self.create_relations()
+            self.plot_entityset()
+            self.feature_matrix_base_parallel()
+            self.save_features_to_json()
+        # одна таблица, создаем fm общий
+        elif (len(self.tables.keys()) == 1) and not self.relations and not self.generate_selected_features:
+            logging.info(f"Work with one table and all features")
+            self.create_dataframes()
+            self.create_entityset()
+            self.plot_entityset()
+            self.feature_matrix_base_parallel()
+            self.save_features_to_json()
+        # много таблиц, создаем fm только из отобранных фич
+        elif (len(self.tables.keys()) > 1) and self.relations and self.generate_selected_features:
+            logging.info(f"Work with many tables and selected features")
+            self.create_dataframes()
+            self.check_cycles()
+            self.create_entityset()
+            self.create_relations()
+            self.plot_entityset()
+            self.select_features()
+            self.selected_feature_matrix()
+        # одна таблица, создаем fm только из отобранных фич
+        elif (len(self.tables.keys()) == 1) and not self.relations and self.generate_selected_features:
+            logging.info(f"Work with one table and selected features")
+            self.create_dataframes()
+            self.create_entityset()
+            self.plot_entityset()
+            self.select_features()
+            self.selected_feature_matrix()
 
     @timeit
     def create_dataframes(self):
@@ -193,4 +239,33 @@ class FeatureGenerator(object):
         )
         logging.info(f"Feature matrix final size: {self.feature_matrix.shape}")
         gc.collect()
+        save_dataframe_to_csv(self.feature_matrix, os.path.join(self.path, self.output_file_name), self.sep)
+
+    @timeit
+    def save_features_to_json(self):
+        ft.save_features(self.feature_names, os.path.join(self.path, self.feature_names_file))
+
+    @timeit
+    def select_features(self):
+        all_features = ft.load_features(os.path.join(self.path, self.feature_names_file))
+        features_from_selector = list(pd.read_csv(self.file_name_with_selected_features, sep=self.sep).columns)
+
+        for feature in all_features:
+            if feature.get_name() in features_from_selector:
+                self.selected_features.append(feature)
+
+    @timeit
+    def selected_feature_matrix(self):
+        """
+        Make future matrix (DataFrame object) with selected features from EntitySet object and save result in csv file.
+        """
+        logging.info(f"Start {self.n_jobs} thread(s)" if self.n_jobs != -1 else f"Start {os.cpu_count()} thread(s)")
+        self.feature_matrix = ft.calculate_feature_matrix(
+            features=self.selected_features,
+            entityset=self.entities,
+            verbose=True,
+            n_jobs=self.n_jobs,
+            chunk_size=self.chunk_size,
+        )
+        logging.info(f"Feature matrix final size: {self.feature_matrix.shape}")
         save_dataframe_to_csv(self.feature_matrix, os.path.join(self.path, self.output_file_name), self.sep)
