@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
-from xgboost import XGBClassifier
+from xgboost import XGBClassifier, XGBRegressor
 import shap
-from sklearn.metrics import roc_auc_score
-from utils import timeit, check_path, check_dir, check_csv, check_csv_files, check_col_in_df, save_dataframe_to_csv
+from sklearn.metrics import roc_auc_score, mean_squared_error
+from utils import timeit, check_path, save_dataframe_to_csv
 import gc
 import os
 import warnings
@@ -30,6 +30,7 @@ class FeatureSelector(object):
     self.sep = parameters['sep']
     self.target = parameters['target']
     self.id = parameters['id']
+    self.type = parameters['type']
     self.num_features = parameters['num_features']
     self.threshold = parameters['threshold']
     self.n_jobs = parameters['n_jobs']
@@ -49,14 +50,28 @@ class FeatureSelector(object):
     """
       Build model on selected features
     """
-    model = XGBClassifier( 
-        objective='binary:logistic',
-        booster='gbtree',
-        three_method='gpu_hist',
-        n_jobs=self.n_jobs,
-        random_state=42,
-        eval_metric='auc',
-        early_stopping_rounds=5)
+    if self.type == 'classification':
+      model = XGBClassifier( 
+          objective='binary:logistic',
+          booster='gbtree',
+          three_method='gpu_hist',
+          n_jobs=self.n_jobs,
+          random_state=42,
+          eval_metric='auc',
+          early_stopping_rounds=5,
+          verbosity = 0)
+      
+    if self.type == 'regression':
+      model = XGBRegressor( 
+          objective='reg:linear',
+          booster='gbtree',
+          three_method='gpu_hist',
+          n_jobs=self.n_jobs,
+          random_state=42,
+          eval_metric='rmse',
+          early_stopping_rounds=5,
+          verbosity = 0)
+      
     model.fit(self.df[columns], self.df[self.target], 
               eval_set=[(self.df[columns], self.df[self.target])], 
               verbose=False)
@@ -80,12 +95,16 @@ class FeatureSelector(object):
     columns.remove(self.target)
     columns.remove(self.id)
     len_previous_columns = -1
+
     while len(columns) != len_previous_columns:
       logging.info(f"{len(columns)} was selected")
       len_previous_columns = len(columns)
       model = self.build_model(columns)
       columns = self.get_df_importance(model.feature_importances_, columns)
-    self.df = self.df[[self.id] + columns + [self.target]]
+    if len(columns) > 1:
+      self.df = self.df[[self.id] + columns + [self.target]]
+    else:
+      self.df = self.df[[self.id] + [columns] + [self.target]]
 
   @timeit
   def get_feature_by_shap(self):
@@ -96,13 +115,18 @@ class FeatureSelector(object):
     columns.remove(self.target)
     columns.remove(self.id)
     len_previous_columns = -1
+
     while len(columns) != len_previous_columns:
       logging.info(f"{len(columns)} was selected")
       len_previous_columns = len(columns)
       model = self.build_model(columns)
       shap_values = shap.TreeExplainer(model).shap_values(self.df[columns])
       columns = self.get_df_importance(np.abs(shap_values).mean(0), columns)
-    self.df = self.df[[self.id] + columns + [self.target]]
+    if len(columns) > 1:
+      self.df = self.df[[self.id] + columns + [self.target]]
+    else:
+      self.df = self.df[[self.id] + [columns] + [self.target]]
+      logging.info(f"Feature final size: {len(columns)}")
 
   @timeit
   def one_factor_calculate_score(self):
@@ -113,14 +137,22 @@ class FeatureSelector(object):
     columns = list(self.df.columns)
     columns.remove(self.target)
     columns.remove(self.id)
-    for column in columns:
-      model = self.build_model([column])
-      predict = model.predict_proba(self.df[[column]])[:, 1]
-      score = roc_auc_score(self.df[self.target], predict)
-      list_score.append(score)
-    df_scores = pd.DataFrame(list(zip(columns, list_score)), columns=['name', 'score'])
-    df_scores.sort_values(by = 'score', ascending=False, inplace=True)
-    self.df = self.df[[self.id] + list(df_scores['name']) + [self.target]]
+    if len(columns) > 1:
+      for column in columns:
+        model = self.build_model([column])
+        if self.type == 'classification':
+          predict = model.predict_proba(self.df[[column]])[:, 1]
+          score = roc_auc_score(self.df[self.target], predict)
+        if self.type == 'regression':
+          predict = model.predict(self.df[[column]])
+          score = np.sqrt(mean_squared_error(self.df[self.target], predict))
+        list_score.append(score)
+
+      df_scores = pd.DataFrame(list(zip(columns, list_score)), columns=['name', 'score'])
+      df_scores.sort_values(by = 'score', 
+                            ascending=[False if self.type =='classification' else True][0], 
+                            inplace=True)
+      self.df = self.df[[self.id] + list(df_scores['name']) + [self.target]]
   
   @timeit
   def one_factor_selection(self):
@@ -133,25 +165,36 @@ class FeatureSelector(object):
     columns = list(self.df.columns)
     columns.remove(self.target)
     columns.remove(self.id)
-    model = self.build_model(columns)
-    predict = model.predict_proba(self.df[columns])[:, 1]
-    current_score = roc_auc_score(self.df[self.target], predict)
 
-    while current_score >= previous_score - self.threshold:
-      drop_column = columns.pop(-1)
-      previous_score = current_score
+    if len(columns) > 1:
       model = self.build_model(columns)
-      predict = model.predict_proba(self.df[columns])[:, 1]
-      current_score = roc_auc_score(self.df[self.target], predict)
-      logging.info(f"{len(columns) + 1} was selected")
-    columns = columns + [drop_column]
+      if self.type == 'classification':
+        predict = model.predict_proba(self.df[columns])[:, 1]
+        current_score = roc_auc_score(self.df[self.target], predict)
+      if self.type == 'regression':
+        predict = model.predict(self.df[columns])
+        current_score = -np.sqrt(mean_squared_error(self.df[self.target], predict))
 
-    if self.num_features != None:
-      self.df = self.df[[self.id] + columns[:self.num_features] + [self.target]]
-      logging.info(f"{self.num_features} was selected")
-      logging.info(f"Feature final size: {self.num_features}")
-    else:
-      self.df = self.df[[self.id] + columns + [self.target]]
-      logging.info(f"Feature final size: {len(columns)}")
+      while (previous_score - current_score <= self.threshold) and (len(columns) > 1):
+        drop_column = columns.pop(-1)
+        previous_score = current_score
+        model = self.build_model(columns)
+        if self.type == 'classification':
+          predict = model.predict_proba(self.df[columns])[:, 1]
+          current_score = roc_auc_score(self.df[self.target], predict)
+        if self.type == 'regression':
+          predict = model.predict(self.df[columns])
+          current_score = -np.sqrt(mean_squared_error(self.df[self.target], predict))
+        logging.info(f"{len(columns) + 1} was selected")
+      columns = columns + [drop_column]
+
+      if self.num_features != None:
+        self.df = self.df[[self.id] + columns[:self.num_features] + [self.target]]
+        logging.info(f"{self.num_features} was selected")
+        logging.info(f"Feature final size: {self.num_features}")
+      else:
+        self.df = self.df[[self.id] + columns + [self.target]]
+        logging.info(f"Feature final size: {len(columns)}")
+
     gc.collect()
     save_dataframe_to_csv(self.df, self.output_file_name, self.sep)
