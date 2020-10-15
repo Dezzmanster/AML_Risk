@@ -40,6 +40,16 @@ class FeatureSelector(object):
     logging.info(f"Object {self} is created")
 
   @timeit
+  def __call__(self):
+    """
+    Combine and run all of class methods for selecting features
+    """
+    self.create_dataframes()
+    self.get_feature_by_shap()
+    self.one_factor_calculate_score()
+    self.one_factor_selection()
+
+  @timeit
   def create_dataframes(self):
     """
       Make DataFrame objects from csv file
