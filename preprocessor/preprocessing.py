@@ -12,7 +12,6 @@ import pandas as pd
 import numpy as np
 
 from sklearn import preprocessing
-from sklearn.preprocessing import KBinsDiscretizer
 from sklearn.impute import SimpleImputer
 
 import multiprocessing as mp
