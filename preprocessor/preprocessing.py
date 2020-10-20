@@ -148,7 +148,7 @@ class FEncoding(object):
             c_type = str(X[column].dtype) 
             unique_values_X = X[column].unique()        
             if any(c_type == t for t in self.numer_types) & (len(unique_values_X) < n_unique):
-                print('\n {} has type {} and unique values: {} -> {}, will be considered as categorical \n'.format(column, c_type, unique_values_X))
+                print('\n {} has type {} and unique values: {}, will be considered as categorical \n'.format(column, c_type, unique_values_X))
                 categor_columns.append(column)
             elif any(c_type == t for t in self.categor_types):
                 categor_columns.append(column)
@@ -271,6 +271,64 @@ class FEncoding(object):
 
         p = Pool(processes = self.n_jobs)
         X =  pd.concat(p.map(self.encode_categor_, 
+                                [X[list(X.columns)[start: start + self.chunks]] for start in range(0, len(X.columns), self.chunks)]
+                                ), axis=1)
+        if self.path != None:
+              X.to_csv(self.path)
+        return X
+
+class FImputation(object):
+    '''
+      Dealing with missing values:
+      We will use simple techniques with regards to the model that we use.
+      For tree-based models, nana will be filled in with max values (or zeros)
+      For regression with means and medians for numerical and categorical types respectively.
+    '''
+
+    def __init__(self, model_type, fill_with_value = None, 
+                    n_jobs = 1, chunks = None, 
+                    path = None,
+                    ):
+        
+        self.model_type = model_type
+
+        self.fill_with_value = fill_with_value
+        
+        self.n_jobs = n_jobs
+        self.chunks = chunks
+        self.path = path
+
+    def impute_(self, X):
+        if self.model_type == 'tree-based':                         
+            imputer = SimpleImputer(missing_values=[np.nan], # what else?
+                                    strategy='constant'
+                                    )
+            if self.fill_with_value == 'zeros':
+                #imputer.set_params(fill_value = 0)
+                #return imputer.fit_transform(X)
+                X.fillna(0, inplace=True)                        
+                return X
+
+            elif self.fill_with_value == 'extreme_values':
+                for column in X.columns:
+                    #imputer.set_params(fill_value = X['AMT_INCOME_TOTAL'][abs(X['AMT_INCOME_TOTAL']) == abs(X['AMT_INCOME_TOTAL']).max()].item())
+                    #X[column] = imputer.fit_transform(np.array(X[column].values).reshape(-1,1))
+                    X[column].fillna(X[column][abs(X[column]) == abs(X[column]).max()].values[0], inplace=True)
+                return X
+
+            else:
+                raise VlaueError('Identify fill_with_value parameter')
+
+        if self.model_type == 'regression-based':
+            #TODO
+            strategies = ['mean', 'median']
+            col_types = []
+
+    def impute(self, X):
+        if self.chunks == None:
+            self.chunks  = int(len(X.columns)/self.n_jobs)
+        p = Pool(processes = self.n_jobs)
+        X =  pd.concat(p.map(self.impute_, 
                                 [X[list(X.columns)[start: start + self.chunks]] for start in range(0, len(X.columns), self.chunks)]
                                 ), axis=1)
         if self.path != None:
