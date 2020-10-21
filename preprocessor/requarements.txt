@@ -1,0 +1,4 @@
+numpy==1.18.5
+pandas==1.1.2
+sklearn==0.0 
+pathlib==1.0.1 
