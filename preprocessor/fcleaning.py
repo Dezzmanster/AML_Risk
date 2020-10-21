@@ -129,6 +129,8 @@ class OutlDetect(object):
     def iqr_proximity_rule_replace(self, X):
         for column in X.columns:
           x = X[column]
+          self.col_outl_info[column]
+          lower, upper = self.col_outl_info[column]
           X[column] = np.where(x > upper, upper, np.where(x < lower, lower, x))
         return X
     
@@ -154,7 +156,7 @@ class OutlDetect(object):
                                 )
         for r in return_:
             self.col_outl_info.update(r)          
-        print('\n col_names:', self.col_outl_info) 
+        print('\n col_outl_info:', self.col_outl_info) 
 
     
     def transform(self, X):
