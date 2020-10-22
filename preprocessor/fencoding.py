@@ -216,10 +216,66 @@ class FEncoding(object):
         X_cat =  pd.concat(Pool(processes = self.n_jobs).map(self.encode_categor_, 
                                 [X[categor_columns[start: start + self.chunks]] for start in range(0, len(categor_columns), self.chunks)]
                                 ), axis=1)
-        X = pd.concat([X[numer_columns],X_cat], axis=1)    
+
+        X = pd.concat([X[numer_columns],X_cat], axis=1)  
+
         
         if self.path != None:
               X.to_csv(self.path)
         return X
 
+class FImputation(object):
+    '''
+      Dealing with missing values:
+      We will use simple techniques with regards to the model that we use.
+      For tree-based models, nana will be filled in with max values (or zeros)
+      For regression with means and medians for numerical and categorical types respectively.
+    '''
+
+    def __init__(self, model_type, fill_with_value = None, 
+                  n_jobs = None, chunks = None, 
+                    path = None):
+        
+        self.model_type = model_type
+        self.fill_with_value = fill_with_value
+        
+        if n_jobs == None:
+            self.n_jobs = 1
+        elif n_jobs == -1:
+            self.n_jobs = mp.cpu_count()
+        else:
+            self.n_jobs = n_jobs        
+        self.chunks = chunks
+        self.path = path
+
+    def impute_(self, X):
+        if self.model_type == 'tree-based':                         
+            imputer = SimpleImputer(missing_values=[np.nan], # what else?
+                                    strategy='constant'
+                                    )
+            if self.fill_with_value == 'zeros':
+                X.fillna(0, inplace=True)                        
+                return X
+            elif self.fill_with_value == 'extreme_values':
+                for column in X.columns:
+                    X[column].fillna(X[column][abs(X[column]) == abs(X[column]).max()].values[0], inplace=True)
+                return X
+
+            else:
+                raise VlaueError('Identify fill_with_value parameter')
+
+        if self.model_type == 'regression-based':
+            #TODO
+            strategies = ['mean', 'median']
+            col_types = []
+
+    def impute(self, X):
+        if self.chunks == None:
+            self.chunks  = int(len(X.columns)/self.n_jobs)
+        X =  pd.concat(Pool(processes = self.n_jobs).map(self.impute_, 
+                                [X[list(X.columns)[start: start + self.chunks]] for start in range(0, len(X.columns), self.chunks)]
+                                ), axis=1)
+        if self.path != None:
+              X.to_csv(self.path)
+        return X
 
