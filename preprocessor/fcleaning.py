@@ -126,44 +126,53 @@ class OutlDetect(object):
             self.col_outl_info[column] = (lower, upper)
         return self.col_outl_info
     
-    def iqr_proximity_rule_replace(self, X):
+    def replace(self, X):
         for column in X.columns:
           x = X[column]
-          self.col_outl_info[column]
           lower, upper = self.col_outl_info[column]
           X[column] = np.where(x > upper, upper, np.where(x < lower, lower, x))
         return X
     
     def gaussian_approximation(self, x):
         # Gaussian approximation
-        #TODO
-        return x
+        for column in X.columns:
+            x = X[column]
+            lower = x.mean() - 3 * x.std()
+            upper = x.mean() + 3 * x.std()
+            self.col_outl_info[column] = (lower, upper)
+        return self.col_outl_info
     
     def quantiles(self, x):
         # Using quantiles
-        #TODO
-        return x
+        for column in X.columns:
+            x = X[column]
+            lower = x.quantile(0.10)
+            upper = x.quantile(0.90)
+            self.col_outl_info[column] = (lower, upper)
+        return self.col_outl_info
 
     def fit(self, X):
         self.col_outl_info = {}
-
         if self.chunks == None:
             self.chunks  = int(len(X.columns)/self.n_jobs)
-
         if self.outliers_detection_technique == 'iqr_proximity_rule':
-            return_ = Pool(processes = self.n_jobs).map(self.iqr_proximity_rule, 
-                                [X[list(X.columns)[start: start + self.chunks]] for start in range(0, len(X.columns), self.chunks)]
-                                )
+            f = self.iqr_proximity_rule
+        elif self.outliers_detection_technique == 'gaussian_approximation':
+            f = self.gaussian_approximation
+        elif self.outliers_detection_technique == 'quantiles':
+            f = self.quantiles
+        return_ = Pool(processes = self.n_jobs).map(f, 
+                            [X[list(X.columns)[start: start + self.chunks]] for start in range(0, len(X.columns), self.chunks)]
+                            )
         for r in return_:
             self.col_outl_info.update(r)          
         print('\n col_outl_info:', self.col_outl_info) 
-
     
     def transform(self, X):
          if self.chunks == None:
            self.chunks  = int(len(X.columns)/self.n_jobs)
-         if self.outliers_detection_technique == 'iqr_proximity_rule':
-            X =  pd.concat(Pool(processes = self.n_jobs).map(self.iqr_proximity_rule_replace, 
+         
+         X =  pd.concat(Pool(processes = self.n_jobs).map(self.replace, 
                              [X[list(X.columns)[start: start + self.chunks]] for start in range(0, len(X.columns), self.chunks)]
                              ), axis=1)
          if self.path != None:
