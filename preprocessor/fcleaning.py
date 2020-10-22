@@ -50,7 +50,7 @@ class EmptyElim(object):
 
     def detect_col(self, X):        
         for column in X.columns:
-            if X[column].nunique() < 2:
+            if len(X[column].unique()) < 2:
                 self.col_names[column] = list(X[column].unique()) 
         return self.col_names
     
