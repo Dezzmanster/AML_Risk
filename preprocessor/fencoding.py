@@ -209,12 +209,15 @@ class FEncoding(object):
         self.initialize_types(X)        
         if self.chunks == None:
             self.chunks  = int(len(X.columns)/self.n_jobs)
+
         categor_columns = [i for i in self.categor_columns if i in list(X.columns)]
         numer_columns = [i for i in self.numer_columns if i in list(X.columns)]
-        X_oh =  pd.concat(Pool(processes = self.n_jobs).map(self.encode_categor_, 
+        
+        X_cat =  pd.concat(Pool(processes = self.n_jobs).map(self.encode_categor_, 
                                 [X[categor_columns[start: start + self.chunks]] for start in range(0, len(categor_columns), self.chunks)]
                                 ), axis=1)
-        X = X[numer_columns].append(X_oh)       
+        X = pd.concat([X[numer_columns],X_cat], axis=1)    
+        
         if self.path != None:
               X.to_csv(self.path)
         return X
