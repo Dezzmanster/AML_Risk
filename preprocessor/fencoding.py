@@ -7,6 +7,7 @@ Created on Wed Oct 21 17:11:40 2020
 
 import pandas as pd
 import numpy as np
+import datetime as dt
 
 from sklearn import preprocessing
 from sklearn.impute import SimpleImputer
@@ -124,7 +125,8 @@ class FEncoding(object):
                       break 
                   except ValueError as err:
                       pass
-            if t and (len(str(x.iloc[0])) > 12):
+            if t and (len(str(x.iloc[0])) > 9) and (len(str(x.iloc[0])) <= 14): 
+            # TODO: better condition on string to identify that it is unix timestep
               try:
                   x = x.astype('float')
                   return pd.Series([dt.datetime.fromtimestamp(x.iloc[i]) for i in range(len(x))]).apply(lambda q: q.strftime('%m/%d/%Y')).astype('datetime64[ns]')
@@ -286,7 +288,7 @@ class FImputation(object):
         self.chunks = chunks
         self.path = path
 
-    def impute_(self, X):
+    def impute(self, X):
         global X_rest
         if self.model_type == 'tree-based':                         
             if self.fill_with_value == 'zeros':

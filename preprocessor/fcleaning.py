@@ -65,7 +65,6 @@ class EmptyElim(object):
           self.col_names.update(r)
         print('\n col_names:', self.col_names) 
     
-    @register_line_magic
     def transform(self, X):
         global X_rest
         if self.chunks == None:
