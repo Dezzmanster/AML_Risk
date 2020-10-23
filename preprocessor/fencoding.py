@@ -4,6 +4,10 @@ Created on Wed Oct 21 17:11:40 2020
 
 @author: Anna
 """
+
+import os, copy, time
+from pathlib import Path
+
 import pandas as pd
 import numpy as np
 
@@ -12,7 +16,7 @@ from sklearn.impute import SimpleImputer
 
 import multiprocessing as mp
 from multiprocessing import Pool
-
+from functools import partial
 
 class Dtimetodata(object):
     '''
@@ -118,7 +122,7 @@ class FEncoding(object):
             unique_values_X = X[column].unique()        
             if any(c_type == t for t in self.numer_types) & (len(unique_values_X) < 20):
                 print('\n {} has type {} and number of unique values: {}, will be considered as a categorical \n'.format(column, c_type, len(unique_values_X)))
-                self.categor_columns.append(column)            
+                self.categor_columns.append(column)
             elif any(c_type == t for t in self.categor_types) & (len(unique_values_X) > 20):
                 print('\n {} has type {} and number of unique values: {}, will be considered as a numerical \n'.format(column, c_type, len(unique_values_X)))
                 self.numer_columns.append(column)
@@ -155,12 +159,14 @@ class FEncoding(object):
 
     def encode_categor_(self, X, method = 'OrdinalEncoder'):
         
-
+        
         if self.method == 'OrdinalEncoder':
-            enc = preprocessing.OrdinalEncoder()
+            X = X.astype('object').fillna(-1)
+            enc = preprocessing.OrdinalEncoder(dtype='int')
             X = pd.DataFrame(enc.fit_transform(X), columns = X.columns)
 
-        if self.method == 'OneHotEncoder':            
+        if self.method == 'OneHotEncoder':  
+            X = X.astype('object')
             X = pd.get_dummies(X, drop_first=True, dummy_na=True)
         
         return X
