@@ -5,9 +5,6 @@ Created on Wed Oct 21 17:11:40 2020
 @author: Anna
 """
 
-import os, copy, time
-from pathlib import Path
-
 import pandas as pd
 import numpy as np
 
@@ -94,15 +91,16 @@ class Dtimetodata(object):
                                 [X[list(X.columns)[start: start + self.chunks]] for start in range(0, len(X.columns), self.chunks)]
                                 ), axis=1)
         if self.path != None:
-              X.to_csv(self.path)
-        return X
+           pd.concat([X, X_rest], axis=1).to_csv(self.path, index=False)
+        return X 
     
 class FEncoding(object):
     def __init__(self, n_jobs = 1, chunks = None, path = None):      
         
         self.categor_types = ['object', 'bool', 'int32', 'int64']
         self.numer_types = ['float', 'float32', 'float64']
-        self.time_types = ['datetime64[ns]'] # What else?
+        self.time_types = ['datetime64[ns]', 'datetime64[ns, tz]'] 
+        # What else? https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html
 
         if n_jobs == None:
             self.n_jobs = 1
@@ -111,7 +109,37 @@ class FEncoding(object):
         else:
             self.n_jobs = n_jobs        
         self.chunks = chunks
-        self.path = path  
+        self.path = path
+    
+    def date_replace_(self, X):
+        def pars_date(x):
+            fmts = ('%Y', '%b %d, %Y','%b %d, %Y','%B %d, %Y','%B %d %Y','%m/%d/%Y','%m/%d/%y','%b %Y','%B%Y','%b %d,%Y', 
+                      '%d.%m.%Y', '%Y.%m.%d', '%d-%m-%Y', '%Y-%m-%d %H:%M:%S')
+            t = True
+            if str(x.dtype) == 'object':
+              for fmt in fmts:
+                  try:
+                      return pd.Series([dt.datetime.strptime(str(x.iloc[i]), fmt) for i in range(len(x))]).apply(lambda q: q.strftime('%m/%d/%Y')).astype('datetime64[ns]')
+                      t = False
+                      break 
+                  except ValueError as err:
+                      pass
+            if t and (len(str(x.iloc[0])) > 12):
+              try:
+                  x = x.astype('float')
+                  return pd.Series([dt.datetime.fromtimestamp(x.iloc[i]) for i in range(len(x))]).apply(lambda q: q.strftime('%m/%d/%Y')).astype('datetime64[ns]')
+              except ValueError as err:
+                  pass
+        
+        for column in X.columns:
+            x = pars_date(X[column])
+            try: 
+              x.nunique()
+              X[column] = x
+            except AttributeError:
+              pass
+
+        return X
 
     def initialize_types_(self, X):
         # Sometimes categorical feature can be presented with a float type.
@@ -157,18 +185,14 @@ class FEncoding(object):
                     X.drop(columns=[column], inplace=True)
         return X
 
-    def encode_categor_(self, X, method = 'OrdinalEncoder'):
-        
-        
+    def encode_categor_(self, X, method = 'OrdinalEncoder'):    
         if self.method == 'OrdinalEncoder':
             X = X.astype('object').fillna(-1)
             enc = preprocessing.OrdinalEncoder(dtype='int')
             X = pd.DataFrame(enc.fit_transform(X), columns = X.columns)
-
         if self.method == 'OneHotEncoder':  
             X = X.astype('object')
-            X = pd.get_dummies(X, drop_first=True, dummy_na=True)
-        
+            X = pd.get_dummies(X)
         return X
 
     
@@ -226,6 +250,18 @@ class FEncoding(object):
               X.to_csv(self.path)
         return X
 
+    def date_replace(self, X):
+        if self.chunks == None:
+            self.chunks  = int(len(X.columns)/self.n_jobs)        
+        X =  pd.concat(Pool(processes = self.n_jobs).map(self.date_replace_, 
+                                [X[list(X.columns)[start: start + self.chunks]] for start in range(0, len(X.columns), self.chunks)]
+                                ), axis=1)  
+    
+        print('\n time_columns:', self.initialize_types(X)['time_columns']) 
+        if self.path != None:
+            pd.concat([X, X_rest], axis=1).to_csv(self.path, index=False)
+        return X 
+
 class FImputation(object):
     '''
       Dealing with missing values:
@@ -251,10 +287,8 @@ class FImputation(object):
         self.path = path
 
     def impute_(self, X):
+        global X_rest
         if self.model_type == 'tree-based':                         
-            imputer = SimpleImputer(missing_values=[np.nan], # what else?
-                                    strategy='constant'
-                                    )
             if self.fill_with_value == 'zeros':
                 X.fillna(0, inplace=True)                        
                 return X
@@ -271,13 +305,12 @@ class FImputation(object):
             strategies = ['mean', 'median']
             col_types = []
 
-    def impute(self, X):
         if self.chunks == None:
             self.chunks  = int(len(X.columns)/self.n_jobs)
         X =  pd.concat(Pool(processes = self.n_jobs).map(self.impute_, 
                                 [X[list(X.columns)[start: start + self.chunks]] for start in range(0, len(X.columns), self.chunks)]
                                 ), axis=1)
         if self.path != None:
-              X.to_csv(self.path)
-        return X
+            pd.concat([X, X_rest], axis=1).to_csv(self.path, index=False)
+        return X 
 

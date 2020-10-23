@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Wed Oct 21 14:06:05 2020
-
 @author: Anna
 """
 
@@ -31,7 +30,6 @@ class EmptyElim(object):
     
     path: str, default = None. File path to save dataframe. 
         None - does not save
-
     '''
     def __init__(self, n_jobs = None, 
                  chunks = None, path = None):
@@ -43,6 +41,7 @@ class EmptyElim(object):
             self.n_jobs = n_jobs        
         self.chunks = chunks
         self.path = path
+         
 
     def detect_col(self, X):        
         for column in X.columns:
@@ -65,16 +64,19 @@ class EmptyElim(object):
         for r in return_:
           self.col_names.update(r)
         print('\n col_names:', self.col_names) 
-
-    def transform(self, X):     
+    
+    @register_line_magic
+    def transform(self, X):
+        global X_rest
         if self.chunks == None:
            self.chunks  = int(len(X.columns)/self.n_jobs)
         X = pd.concat(Pool(processes = self.n_jobs).map(self.drop_col, 
                              [X[list(X.columns)[start: start + self.chunks]] for start in range(0, len(X.columns), self.chunks)]
                            ), axis=1)
+        
         if self.path != None:
-            X.to_csv(self.path)
-        return X    
+           pd.concat([X, X_rest], axis=1).to_csv(self.path, index=False)
+        return X     
         
     def fit_transform(self, X):
         self.fit(X)
@@ -165,6 +167,8 @@ class OutlDetect(object):
         print('\n col_outl_info:', self.col_outl_info) 
     
     def transform(self, X):
+         global X_rest
+         
          if self.chunks == None:
            self.chunks  = int(len(X.columns)/self.n_jobs)
          
@@ -172,8 +176,8 @@ class OutlDetect(object):
                              [X[list(X.columns)[start: start + self.chunks]] for start in range(0, len(X.columns), self.chunks)]
                              ), axis=1)
          if self.path != None:
-            X.to_csv(self.path)
-         return X
+            pd.concat([X, X_rest], axis=1).to_csv(self.path, index=False)
+         return X  
     
     def fit_transform(self, X):
         self.fit(X)
