@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Wed Oct 21 17:11:40 2020
-
 @author: Anna
 """
 import pandas as pd
@@ -9,87 +8,14 @@ import numpy as np
 import datetime as dt
 from sklearn import preprocessing
 import multiprocessing as mp
-
-class Dtimetodata(object):
-    '''
-    dtime_col_names: dict, default = None. Dictionary of columns that should be transformed into time columns.
-        None - will not be executed 
-        example: {
-                  'ddays' : list of columns,
-                  'dmonths' : list of columns,
-                  'dyears' : list of columns
-                  }
-    
-    start_date: str, default = '2020-01-01'. The starting point.
-
-    time_encode: bool, default = False. If True, then time columns will be encoded via sklearn functions: .dt.year .dt.month, .dt.day, and added to the DataFrame.
-
-    drop_current: bool, default = False. If True, then all time columns will be dropped. 
-
-    n_jobs: int, default = None. The number of jobs to run in parallel.
-        None - means 1
-        -1 - means using all processors
-    
-    chunks: int, default = None. Number of features sent to processor per time.
-        None - means number of features/number of cpu
-    
-    path: str, default = None. File path to save dataframe. 
-        None - does not save
-    
-    '''
-    
-    def __init__(self, dtime_col_names = None, start_date = '2020-01-01', 
-                 time_encode = False, drop_current = False, 
-                 n_jobs = None, chunks = None, path = None):
-      
-        self.dtime_col_names = dtime_col_names
-        self.start_date = pd.Timestamp(start_date)
-        self.time_encode = time_encode
-        self.drop_current = drop_current
-      
-        if n_jobs == None:
-            self.n_jobs = 1
-        elif n_jobs == -1:
-            self.n_jobs = mp.cpu_count()
-        else:
-            self.n_jobs = n_jobs        
-        self.chunks = chunks
-        self.path = path
-
-    def dtime_to_data(self, X):
-        if self.dtime_col_names != None:
-            for delays, k in zip(list(self.dtime_col_names.keys()), [1, 30, 365]):
-                for column in self.dtime_col_names[delays]:
-                    if any(column == c for c in X.columns):
-                        #print('\n {} processed ...'.format(column))
-                        X[column + '_date'] = self.start_date + pd.to_timedelta(X[column]*k, 'D')
-                        if self.drop_current:
-                            X.drop(columns=[column], inplace=True)
-
-        if self.time_encode:        
-            for column in X.columns:
-              if str(X[column].dtype) == 'datetime64[ns]': 
-                  # TODO: check if there are any other time types
-                  # datetime64[ns] -> int64
-                  X[column + '_year'] = X[column].dt.year
-                  X[column + '_month'] = X[column].dt.month
-                  X[column + '_day'] = X[column].dt.day
-                  #print('\n {} was encoded'.format(column))
-                  if self.drop_current:                      
-                      X.drop(columns=[column], inplace=True)                  
-        return X 
-
-    def transform(self, X):   
-        if self.chunks == None:
-            self.chunks  = int(len(X.columns)/self.n_jobs)
-        X =  pd.concat(mp.Pool(processes = self.n_jobs).map(self.dtime_to_data, 
-                                [X[list(X.columns)[start: start + self.chunks]] for start in range(0, len(X.columns), self.chunks)]
-                                ), axis=1)
-        if self.path != None:
-           pd.concat([X, X_rest], axis=1).to_csv(self.path, index=False)
-        return X 
+import logging
+logging.config.fileConfig(fname='logger.ini', defaults={'logfilename': 'logfile.log'})
+import warnings
+warnings.filterwarnings('ignore')
+ 
     
 class FEncoding(object):
+    @timeit
     def __init__(self, n_jobs = 1, chunks = None):      
         
         self.categor_types = ['object', 'bool', 'int32', 'int64', 'int8']
@@ -105,6 +31,8 @@ class FEncoding(object):
         else:
             self.n_jobs = n_jobs        
         self.chunks = chunks
+        
+        logging.info(f"Object {self} is created")
     
     def date_replace_(self, X):
         def pars_date(x):
@@ -214,6 +142,7 @@ class FEncoding(object):
                     X.drop(columns=[column], inplace=True)
         return X  
     
+    @timeit
     def initialize_types(self, X):    
         columns_X = list(X.columns)
         n_columns_X = len(columns_X)
@@ -232,11 +161,14 @@ class FEncoding(object):
             self.categor_columns += categor_columns
             self.numer_columns += numer_columns
             self.time_columns += time_columns
+        
+        logging.info(f"Types have been initialized.")
         return {'categor_columns': self.categor_columns,
                            'numer_columns': self.numer_columns,
                            'time_columns': self.time_columns       
          }
 
+    @timeit
     def bucket_numerical(self, X, 
                          n_bins=5, columns_to_buck = 'all_numerical', 
                          drop_current = False):      
@@ -263,9 +195,12 @@ class FEncoding(object):
         if len(rest_col) != 0:
             X = pd.concat([X[rest_col], X_num], axis=1)
         else:
-            X = X_num 
+            X = X_num
+        
+        logging.info(f"Columns {numer_columns} have been bucketed.")
         return X
 
+    @timeit
     def encode_categor(self, X, method = 'OrdinalEncoder'):
         self.method = method
         self.initialize_types(X)
@@ -288,8 +223,11 @@ class FEncoding(object):
             X = pd.concat([X[rest_col], X_cat], axis=1)
         else:
             X = X_cat  
+        
+        logging.info(f"Columns {categor_columns} have been encoded.")
         return X
 
+    @timeit
     def encode_time(self, X, drop_current = False):
         self.drop_current = drop_current
         self.initialize_types(X)
@@ -313,8 +251,10 @@ class FEncoding(object):
             X = pd.concat([X[rest_col], X_time], axis=1)
         else:
             X = X_time    
+        logging.info(f"Columns {time_columns} have been encoded.")
         return X
 
+    @timeit
     def date_replace(self, X):
         columns_X = list(X.columns)
         n_columns_X = len(columns_X)
@@ -328,6 +268,7 @@ class FEncoding(object):
                                 ), axis=1)  
     
         print('\n time_columns:', self.initialize_types(X)['time_columns']) 
+        logging.info(f"Columns {self.initialize_types(X)['time_columns']} have been detected as date and encoded as yy-mm-dd.")
         return X 
 
 class FImputation(FEncoding):
@@ -337,7 +278,7 @@ class FImputation(FEncoding):
       For tree-based models, nana will be filled in with max values (or zeros)
       For regression with means and medians for numerical and categorical types respectively.
     '''
-
+    @timeit
     def __init__(self, model_type, fill_with_value = None, 
                   n_jobs = None, chunks = None):
         super(FImputation, self).__init__()
@@ -352,6 +293,8 @@ class FImputation(FEncoding):
         else:
             self.n_jobs = n_jobs        
         self.chunks = chunks
+        
+        logging.info(f"Object {self} is created")
 
     def impute_(self, X):
         if self.model_type == 'tree-based':                         
@@ -374,8 +317,9 @@ class FImputation(FEncoding):
                     X[column].fillna(int(np.median(unique_values)), inplace=True)
                 if any(column == t for t in numer_columns):
                     X[column].fillna(np.mean(unique_values), inplace=True)
-            return X  
-
+            return X 
+        
+    @timeit
     def impute(self, X):
         #self.initialize_types(X)
         X = self.encode_categor(X, method = 'OrdinalEncoder')
@@ -390,5 +334,6 @@ class FImputation(FEncoding):
         X =  pd.concat(mp.Pool(processes = self.n_jobs).map(self.impute_, 
                                 [X[columns_X[start: start + self.chunks]] for start in range(0, n_columns_X, self.chunks)]
                                 ), axis=1)
+        logging.info(f"Successfully imputed.")
         return X 
 

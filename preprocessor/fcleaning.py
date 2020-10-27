@@ -7,6 +7,10 @@ import time
 import pandas as pd
 import numpy as np
 import multiprocessing as mp
+import logging
+logging.config.fileConfig(fname='logger.ini', defaults={'logfilename': 'logfile.log'})
+import warnings
+warnings.filterwarnings('ignore')
 
 def save_to_csv(X, rest_columns=None, path=None):
     '''
@@ -20,9 +24,12 @@ def save_to_csv(X, rest_columns=None, path=None):
     if rest_columns != None:
         pd.concat([X, rest_columns], axis=1).to_csv(path, index=False)
         print('\n Successfully saved to {}'.format(path))
+        logging.info(f"Successfully saved to {path}")
     else:
         X.to_csv(path, index=False)
         print('\n Successfully saved to {}'.format(path))
+        logging.info(f"Successfully saved to {path}")
+        
 
 def reduce_mem_usage(X):
     """ 
@@ -31,6 +38,7 @@ def reduce_mem_usage(X):
     """
     start_mem = X.memory_usage().sum() / 1024**2
     print('\n Memory usage of dataframe is {:.2f} MB'.format(start_mem))
+    logging.info(f"Memory usage of dataframe is {start_mem} MB'")
     for col in X.columns:
             col_type = X[col].dtype
             if col_type != object:
@@ -57,6 +65,8 @@ def reduce_mem_usage(X):
     end_mem = X.memory_usage().sum() / 1024**2
     print('\n Memory usage after optimization is: {:.2f} MB'.format(end_mem))
     print('\n Memory usage decreased by {:.1f}%'.format(100 * (start_mem - end_mem) / start_mem))
+    logging.info(f"Memory usage after optimization is: {end_mem} MB")
+    logging.info(f"Memory usage decreased by {100 * (start_mem - end_mem) / start_mem}%")
     return X
 
 class EmptyElim(object):
@@ -67,6 +77,7 @@ class EmptyElim(object):
     chunks: int, default = None. Number of features sent to processor per time.
         None - means number of features/number of cpu
     '''
+    @timeit
     def __init__(self, n_jobs = None, chunks = None):
         if n_jobs == None:
             self.n_jobs = 1
@@ -75,19 +86,25 @@ class EmptyElim(object):
         else:
             self.n_jobs = n_jobs        
         self.chunks = chunks       
+        
+        logging.info(f"Object {self} is created")
 
-    def detect_col(self, X):        
+    def detect_col_(self, X):        
         for column in X.columns:
             if len(X[column].unique()) < 2:
                 self.col_names[column] = list(X[column].unique()) 
         return self.col_names
     
-    def drop_col(self, X):
+    def drop_col_(self, X):
         columns = [i for i in list(self.col_names.keys()) if i in list(X.columns)]
         X.drop(columns=columns, inplace=True)
         return X
 
-    def fit(self, X):        
+    @timeit
+    def fit(self, X):
+        '''
+        Create a dictionary of names of columns (self.colnames) to drop.
+        '''        
         self.col_names = {} 
         columns_X = list(X.columns)
         n_columns_X = len(columns_X)
@@ -95,26 +112,37 @@ class EmptyElim(object):
             while int(n_columns_X/self.n_jobs) <= 1:
                 self.n_jobs -=1
             self.chunks = int(n_columns_X/self.n_jobs)
-        return_ = mp.Pool(processes = self.n_jobs).map(self.detect_col, 
+        return_ = mp.Pool(processes = self.n_jobs).map(self.detect_col_, 
                              [X[columns_X[start: start + self.chunks]] for start in range(0, n_columns_X, self.chunks)]
                            )     
         for r in return_:
           self.col_names.update(r)
-        print('\n col_names:', self.col_names) 
-    
+        print('\n col_names:', C)
+        logging.info(f"Dictionary of names of columns to drop has been created: {self.colnames}")
+        
+    @timeit
     def transform(self, X):
+        '''
+        Drops self.col_names that were initialized by self.fit function.
+        '''   
+        logging.info(f"Initial X shape: {X.shape}")
         columns_X = list(X.columns)
         n_columns_X = len(columns_X)
         if self.chunks == None:
             while int(n_columns_X/self.n_jobs) <= 1:
                 self.n_jobs -=1
             self.chunks = int(n_columns_X/self.n_jobs)
-        X = pd.concat(mp.Pool(processes = self.n_jobs).map(self.drop_col, 
+        X = pd.concat(mp.Pool(processes = self.n_jobs).map(self.drop_col_, 
                              [X[columns_X[start: start + self.chunks]] for start in range(0, n_columns_X, self.chunks)]
                            ), axis=1)
+        logging.info(f"Columns were dropped, X new shape: {X.shape}")
         return X     
-        
+    
+    @timeit    
     def fit_transform(self, X):
+        '''
+        Find self.col_names and drops them.
+        '''
         self.fit(X)
         return self.transform(X)
 
@@ -135,6 +163,8 @@ class OutlDetect(object):
     chunks: int, default = None. Number of features sent to processor per time.
         None - means number of features/number of cpu
     '''
+    
+    @timeit
     def __init__(self, outliers_detection_technique = 'iqr_proximity_rule', n_jobs = None, 
                  chunks = None):            
         self.outliers_detection_technique = outliers_detection_technique
@@ -145,6 +175,8 @@ class OutlDetect(object):
         else:
             self.n_jobs = n_jobs        
         self.chunks = chunks
+        
+        logging.info(f"Object {self} is created")
                   
     def iqr_proximity_rule(self, X):
         for column in X.columns:
@@ -162,7 +194,7 @@ class OutlDetect(object):
           X[column] = np.where(x > upper, upper, np.where(x < lower, lower, x))
         return X
     
-    def gaussian_approximation(self, x):
+    def gaussian_approximation(self, X):
         # Gaussian approximation
         for column in X.columns:
             x = X[column]
@@ -171,7 +203,7 @@ class OutlDetect(object):
             self.col_outl_info[column] = (lower, upper)
         return self.col_outl_info
     
-    def quantiles(self, x):
+    def quantiles(self, X):
         # Using quantiles
         for column in X.columns:
             x = X[column]
@@ -179,8 +211,12 @@ class OutlDetect(object):
             upper = x.quantile(0.90)
             self.col_outl_info[column] = (lower, upper)
         return self.col_outl_info
-
+    
+    @timeit
     def fit(self, X):
+        '''
+        Collect information regarding self.col_outl_info - lower and upper bounds to clip outliers.
+        '''
         columns_X = list(X.columns)
         n_columns_X = len(columns_X)
         if self.chunks == None:
@@ -202,8 +238,14 @@ class OutlDetect(object):
         for r in return_:
             self.col_outl_info.update(r)          
         print('\n col_outl_info (upper, lower) bounds:', self.col_outl_info) 
+        
+        logging.info(f"{self.outliers_detection_technique}, col_outl_info (upper, lower) bounds:{self.col_outl_info}")
     
-    def transform(self, X):        
+    @timeit
+    def transform(self, X):   
+        '''
+        Clip ouliers by using the dict of lower and upper bounds (self.col_outl_info).
+        '''
         columns_X = list(X.columns)
         n_columns_X = len(columns_X)
         if self.chunks == None:
@@ -214,8 +256,14 @@ class OutlDetect(object):
         X =  pd.concat(mp.Pool(processes = self.n_jobs).map(self.replace, 
                               [X[columns_X[start: start + self.chunks]] for start in range(0, n_columns_X, self.chunks)]
                               ), axis=1)
+        logging.info(f"Successfully clipped")
         return X  
     
+    @timeit
     def fit_transform(self, X):
+        '''
+        1. Collect information regarding self.col_outl_info - lower and upper bounds to clip outliers.
+        2. Clip ouliers by using the dict of lower and upper bounds (self.col_outl_info).
+        '''
         self.fit(X)
         return self.transform(X)
