@@ -8,14 +8,20 @@ import numpy as np
 import datetime as dt
 from sklearn import preprocessing
 import multiprocessing as mp
-import logging
-logging.config.fileConfig(fname='logger.ini', defaults={'logfilename': 'logfile.log'})
 import warnings
 warnings.filterwarnings('ignore')
  
+
+import logging
+# logger = logging.getLogger()
+# fhandler = logging.FileHandler(filename='fencoding_log.log', mode='a')
+# formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# fhandler.setFormatter(formatter)
+# logger.addHandler(fhandler)
+# logger.setLevel(logging.DEBUG)
     
 class FEncoding(object):
-    @timeit
+    
     def __init__(self, n_jobs = 1, chunks = None):      
         
         self.categor_types = ['object', 'bool', 'int32', 'int64', 'int8']
@@ -142,7 +148,7 @@ class FEncoding(object):
                     X.drop(columns=[column], inplace=True)
         return X  
     
-    @timeit
+    
     def initialize_types(self, X):    
         columns_X = list(X.columns)
         n_columns_X = len(columns_X)
@@ -168,7 +174,7 @@ class FEncoding(object):
                            'time_columns': self.time_columns       
          }
 
-    @timeit
+    
     def bucket_numerical(self, X, 
                          n_bins=5, columns_to_buck = 'all_numerical', 
                          drop_current = False):      
@@ -200,7 +206,7 @@ class FEncoding(object):
         logging.info(f"Columns {numer_columns} have been bucketed.")
         return X
 
-    @timeit
+    
     def encode_categor(self, X, method = 'OrdinalEncoder'):
         self.method = method
         self.initialize_types(X)
@@ -227,7 +233,7 @@ class FEncoding(object):
         logging.info(f"Columns {categor_columns} have been encoded.")
         return X
 
-    @timeit
+    
     def encode_time(self, X, drop_current = False):
         self.drop_current = drop_current
         self.initialize_types(X)
@@ -254,7 +260,7 @@ class FEncoding(object):
         logging.info(f"Columns {time_columns} have been encoded.")
         return X
 
-    @timeit
+    
     def date_replace(self, X):
         columns_X = list(X.columns)
         n_columns_X = len(columns_X)
@@ -278,7 +284,7 @@ class FImputation(FEncoding):
       For tree-based models, nana will be filled in with max values (or zeros)
       For regression with means and medians for numerical and categorical types respectively.
     '''
-    @timeit
+    
     def __init__(self, model_type, fill_with_value = None, 
                   n_jobs = None, chunks = None):
         super(FImputation, self).__init__()
@@ -319,7 +325,7 @@ class FImputation(FEncoding):
                     X[column].fillna(np.mean(unique_values), inplace=True)
             return X 
         
-    @timeit
+    
     def impute(self, X):
         #self.initialize_types(X)
         X = self.encode_categor(X, method = 'OrdinalEncoder')

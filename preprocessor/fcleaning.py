@@ -7,10 +7,16 @@ import time
 import pandas as pd
 import numpy as np
 import multiprocessing as mp
-import logging
-logging.config.fileConfig(fname='logger.ini', defaults={'logfilename': 'logfile.log'})
 import warnings
 warnings.filterwarnings('ignore')
+
+import logging
+# logger = logging.getLogger()
+# fhandler = logging.FileHandler(filename='fcleaning_log.log', mode='a')
+# formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# fhandler.setFormatter(formatter)
+# logger.addHandler(fhandler)
+# logger.setLevel(logging.DEBUG)
 
 def save_to_csv(X, rest_columns=None, path=None):
     '''
@@ -77,7 +83,7 @@ class EmptyElim(object):
     chunks: int, default = None. Number of features sent to processor per time.
         None - means number of features/number of cpu
     '''
-    @timeit
+    
     def __init__(self, n_jobs = None, chunks = None):
         if n_jobs == None:
             self.n_jobs = 1
@@ -100,7 +106,7 @@ class EmptyElim(object):
         X.drop(columns=columns, inplace=True)
         return X
 
-    @timeit
+    
     def fit(self, X):
         '''
         Create a dictionary of names of columns (self.colnames) to drop.
@@ -117,10 +123,10 @@ class EmptyElim(object):
                            )     
         for r in return_:
           self.col_names.update(r)
-        print('\n col_names:', C)
-        logging.info(f"Dictionary of names of columns to drop has been created: {self.colnames}")
+        print('\n col_names:', self.col_names)
+        logging.info(f"Dictionary of names of columns to drop has been created: {self.col_names}")
         
-    @timeit
+    
     def transform(self, X):
         '''
         Drops self.col_names that were initialized by self.fit function.
@@ -138,7 +144,7 @@ class EmptyElim(object):
         logging.info(f"Columns were dropped, X new shape: {X.shape}")
         return X     
     
-    @timeit    
+        
     def fit_transform(self, X):
         '''
         Find self.col_names and drops them.
@@ -164,7 +170,7 @@ class OutlDetect(object):
         None - means number of features/number of cpu
     '''
     
-    @timeit
+    
     def __init__(self, outliers_detection_technique = 'iqr_proximity_rule', n_jobs = None, 
                  chunks = None):            
         self.outliers_detection_technique = outliers_detection_technique
@@ -212,7 +218,7 @@ class OutlDetect(object):
             self.col_outl_info[column] = (lower, upper)
         return self.col_outl_info
     
-    @timeit
+    
     def fit(self, X):
         '''
         Collect information regarding self.col_outl_info - lower and upper bounds to clip outliers.
@@ -241,7 +247,7 @@ class OutlDetect(object):
         
         logging.info(f"{self.outliers_detection_technique}, col_outl_info (upper, lower) bounds:{self.col_outl_info}")
     
-    @timeit
+    
     def transform(self, X):   
         '''
         Clip ouliers by using the dict of lower and upper bounds (self.col_outl_info).
@@ -259,7 +265,7 @@ class OutlDetect(object):
         logging.info(f"Successfully clipped")
         return X  
     
-    @timeit
+    
     def fit_transform(self, X):
         '''
         1. Collect information regarding self.col_outl_info - lower and upper bounds to clip outliers.
