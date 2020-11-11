@@ -26,18 +26,19 @@ def save_to_csv(X, rest_columns=None, path=None):
     rest_columns: pd.Series. The rest columns to concat with X before saving.
     path: string. The path where to save the table.
     '''
-    if path == None:
+
+    if path is None:
         path = 'trial_{}.csv'.format(time.strftime("%m%d%Y-%H:%M"))
 
-    if rest_columns != None:
-        col_XX_rest= list(X.columns) + list(rest_columns.columns)
-        pd.DataFrame(np.hstack([X.to_numpy(), rest_columns.to_numpy()]), columns=col_XX_rest).to_csv(path, index=False)
+    if rest_columns is not None:
+        col_XX_rest= list(X.columns) + list(pd.DataFrame(rest_columns).columns)
+        pd.DataFrame(np.hstack([X.to_numpy(), rest_columns.to_numpy().reshape(len(rest_columns),1)]), columns=col_XX_rest).to_csv(path, index=False)
         print('\n Successfully saved to {}'.format(path))
-        logging.info(f"Successfully saved to {path}")
+ #       logging.info(f"Successfully saved to {path}")
     else:
         X.to_csv(path, index=False)
         print('\n Successfully saved to {}'.format(path))
-        logging.info(f"Successfully saved to {path}")
+#        logging.info(f"Successfully saved to {path}")
         
 
 def reduce_mem_usage(X):
@@ -487,7 +488,7 @@ class OutlDetect(FEncoding):
         'quantiles' - the boundaries are determined using the quantiles, through which you can specify any percentage you want
          Source: https://heartbeat.fritz.ai/hands-on-with-feature-engineering-techniques-dealing-with-outliers-fcc9f57cb63b
         
-        Note: Categorical Outliers Don’t Exist
+        Note: Categorical Outliers Donâ€™t Exist
         Source: https://medium.com/owl-analytics/categorical-outliers-dont-exist-8f4e82070cb2
     
     n_jobs: int, default = None. The number of jobs to run in parallel.
