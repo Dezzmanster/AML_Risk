@@ -1,0 +1,98 @@
+2020-11-15 21:32:06,355 - root - INFO - Memory usage of dataframe is 5.264404296875 MB'
+2020-11-15 21:32:06,390 - root - INFO - Memory usage after optimization is: 1.773956298828125 MB
+2020-11-15 21:32:06,391 - root - INFO - Memory usage decreased by 66.30281036961462%
+2020-11-15 21:32:18,475 - root - INFO - Object <fencoding_CPUs.EmptyElim object at 0x15551389daf0> is created
+2020-11-15 21:32:18,476 - root - INFO - Object <fencoding_CPUs.FEncoding object at 0x15551389da60> is created
+2020-11-15 21:32:18,476 - root - INFO - Object <fencoding_CPUs.OutlDetect object at 0x15551389d6d0> is created
+2020-11-15 21:32:18,476 - root - INFO - Object <fencoding_CPUs.OutlDetect object at 0x15551389d6d0> is created
+2020-11-15 21:32:18,476 - root - INFO - Object <fencoding_CPUs.FImputation object at 0x155541f1e880> is created
+2020-11-15 21:32:18,476 - root - INFO - Object <fencoding_CPUs.FImputation object at 0x155541f1e880> is created
+2020-11-15 21:32:18,476 - root - INFO - Object <fencoding_CPUs.FImputation object at 0x155541f1e940> is created
+2020-11-15 21:32:18,476 - root - INFO - Object <fencoding_CPUs.FImputation object at 0x155541f1e940> is created
+2020-11-15 21:32:18,496 - root - INFO - Memory usage of dataframe is 5.264404296875 MB'
+2020-11-15 21:32:18,525 - root - INFO - Memory usage after optimization is: 1.773956298828125 MB
+2020-11-15 21:32:18,525 - root - INFO - Memory usage decreased by 66.30281036961462%
+2020-11-15 21:32:18,693 - root - INFO - Dictionary of names of columns to drop has been created: {}
+2020-11-15 21:32:18,693 - root - INFO - Initial X shape: (30000, 23)
+2020-11-15 21:32:18,869 - root - INFO - Columns were dropped, X new shape: (30000, 23)
+2020-11-15 21:32:18,951 - root - INFO - LIMIT_BAL has type float32 and number of unique values: 81, will be considered as a categorical
+2020-11-15 21:32:19,106 - root - INFO - PAY_AMT4 has type float32 and number of unique values: 6937, will be considered as a categorical
+2020-11-15 21:32:19,138 - root - INFO - PAY_AMT5 has type float32 and number of unique values: 6897, will be considered as a categorical
+2020-11-15 21:32:19,147 - root - INFO - PAY_AMT6 has type float32 and number of unique values: 6939, will be considered as a categorical
+2020-11-15 21:32:19,151 - root - INFO - BILL_AMT1 has type float32 and number of unique values: 22723, will be considered as a categorical
+2020-11-15 21:32:19,164 - root - INFO - BILL_AMT5 has type float32 and number of unique values: 21010, will be considered as a categorical
+2020-11-15 21:32:19,207 - root - INFO - BILL_AMT2 has type float32 and number of unique values: 22346, will be considered as a categorical
+2020-11-15 21:32:19,219 - root - INFO - BILL_AMT6 has type float32 and number of unique values: 20604, will be considered as a categorical
+2020-11-15 21:32:19,242 - root - INFO - PAY_AMT1 has type float32 and number of unique values: 7943, will be considered as a categorical
+2020-11-15 21:32:19,253 - root - INFO - BILL_AMT3 has type float32 and number of unique values: 22026, will be considered as a categorical
+2020-11-15 21:32:19,261 - root - INFO - PAY_AMT2 has type float32 and number of unique values: 7899, will be considered as a categorical
+2020-11-15 21:32:19,281 - root - INFO - PAY_AMT3 has type float32 and number of unique values: 7518, will be considered as a categorical
+2020-11-15 21:32:19,313 - root - INFO - BILL_AMT4 has type float32 and number of unique values: 21548, will be considered as a categorical
+2020-11-15 21:32:19,332 - root - INFO - Types have been initialized.
+2020-11-15 21:32:19,332 - root - INFO - No time columns in the dataset
+2020-11-15 21:32:19,410 - root - INFO - LIMIT_BAL has type float32 and number of unique values: 81, will be considered as a categorical
+2020-11-15 21:32:19,473 - root - INFO - PAY_AMT4 has type float32 and number of unique values: 6937, will be considered as a categorical
+2020-11-15 21:32:19,489 - root - INFO - BILL_AMT5 has type float32 and number of unique values: 21010, will be considered as a categorical
+2020-11-15 21:32:19,497 - root - INFO - PAY_AMT5 has type float32 and number of unique values: 6897, will be considered as a categorical
+2020-11-15 21:32:19,522 - root - INFO - PAY_AMT6 has type float32 and number of unique values: 6939, will be considered as a categorical
+2020-11-15 21:32:19,504 - root - INFO - BILL_AMT1 has type float32 and number of unique values: 22723, will be considered as a categorical
+2020-11-15 21:32:19,557 - root - INFO - BILL_AMT2 has type float32 and number of unique values: 22346, will be considered as a categorical
+2020-11-15 21:32:19,574 - root - INFO - BILL_AMT6 has type float32 and number of unique values: 20604, will be considered as a categorical
+2020-11-15 21:32:19,586 - root - INFO - PAY_AMT1 has type float32 and number of unique values: 7943, will be considered as a categorical
+2020-11-15 21:32:19,608 - root - INFO - PAY_AMT2 has type float32 and number of unique values: 7899, will be considered as a categorical
+2020-11-15 21:32:19,617 - root - INFO - BILL_AMT3 has type float32 and number of unique values: 22026, will be considered as a categorical
+2020-11-15 21:32:19,628 - root - INFO - PAY_AMT3 has type float32 and number of unique values: 7518, will be considered as a categorical
+2020-11-15 21:32:19,671 - root - INFO - BILL_AMT4 has type float32 and number of unique values: 21548, will be considered as a categorical
+2020-11-15 21:32:19,738 - root - INFO - Types have been initialized.
+2020-11-15 21:32:21,045 - root - INFO - Columns ['LIMIT_BAL', 'SEX', 'EDUCATION', 'MARRIAGE', 'AGE', 'PAY_0', 'PAY_2', 'PAY_3', 'PAY_4', 'PAY_5', 'PAY_6', 'BILL_AMT1', 'BILL_AMT2', 'BILL_AMT3', 'BILL_AMT4', 'BILL_AMT5', 'BILL_AMT6', 'PAY_AMT1', 'PAY_AMT2', 'PAY_AMT3', 'PAY_AMT4', 'PAY_AMT5', 'PAY_AMT6'] have been encoded.
+2020-11-15 21:32:21,255 - root - INFO - Types have been initialized.
+2020-11-15 21:32:21,256 - root - INFO - No numerical columns in the dataset
+2020-11-15 21:32:21,482 - root - INFO - Types have been initialized.
+2020-11-15 21:32:21,482 - root - INFO - No numerical columns in the dataset
+2020-11-15 21:32:25,141 - root - INFO - Types have been initialized.
+2020-11-15 21:32:26,738 - root - INFO - Columns ['LIMIT_BAL', 'SEX', 'EDUCATION', 'MARRIAGE', 'AGE', 'PAY_0', 'PAY_2', 'PAY_3', 'PAY_4', 'PAY_5', 'PAY_6', 'BILL_AMT1', 'BILL_AMT2', 'BILL_AMT3', 'BILL_AMT4', 'BILL_AMT5', 'BILL_AMT6', 'PAY_AMT1', 'PAY_AMT2', 'PAY_AMT3', 'PAY_AMT4', 'PAY_AMT5', 'PAY_AMT6'] have been encoded.
+2020-11-15 21:32:26,988 - root - INFO - Successfully imputed
+2020-11-15 21:32:26,991 - root - INFO - Memory usage of dataframe is 5.264404296875 MB'
+2020-11-15 21:32:27,016 - root - INFO - Memory usage after optimization is: 1.0014801025390625 MB
+2020-11-15 21:32:27,016 - root - INFO - Memory usage decreased by 80.9763831563326%
+2020-11-15 21:32:27,226 - root - INFO - Successfully saved to data/default_ucr_regression.csv
+2020-11-15 21:32:27,390 - root - INFO - Types have been initialized.
+2020-11-15 21:32:28,876 - root - INFO - Columns ['LIMIT_BAL', 'SEX', 'EDUCATION', 'MARRIAGE', 'AGE', 'PAY_0', 'PAY_2', 'PAY_3', 'PAY_4', 'PAY_5', 'PAY_6', 'BILL_AMT1', 'BILL_AMT2', 'BILL_AMT3', 'BILL_AMT4', 'BILL_AMT5', 'BILL_AMT6', 'PAY_AMT1', 'PAY_AMT2', 'PAY_AMT3', 'PAY_AMT4', 'PAY_AMT5', 'PAY_AMT6'] have been encoded.
+2020-11-15 21:32:29,350 - root - INFO - Successfully imputed
+2020-11-15 21:32:29,353 - root - INFO - Memory usage of dataframe is 5.264404296875 MB'
+2020-11-15 21:32:29,378 - root - INFO - Memory usage after optimization is: 1.0014801025390625 MB
+2020-11-15 21:32:29,378 - root - INFO - Memory usage decreased by 80.9763831563326%
+2020-11-15 21:32:29,581 - root - INFO - Successfully saved to data/default_ucr_boosting.csv
+2020-11-15 21:33:00,977 - root - INFO - Object <fencoding_CPUs.EmptyElim object at 0x1555137e7640> is created
+2020-11-15 21:33:00,977 - root - INFO - Object <fencoding_CPUs.FEncoding object at 0x1555137e7880> is created
+2020-11-15 21:33:00,977 - root - INFO - Object <fencoding_CPUs.OutlDetect object at 0x15551389daf0> is created
+2020-11-15 21:33:00,977 - root - INFO - Object <fencoding_CPUs.OutlDetect object at 0x15551389daf0> is created
+2020-11-15 21:33:00,977 - root - INFO - Object <fencoding_CPUs.FImputation object at 0x15551389da60> is created
+2020-11-15 21:33:00,977 - root - INFO - Object <fencoding_CPUs.FImputation object at 0x15551389da60> is created
+2020-11-15 21:33:00,978 - root - INFO - Object <fencoding_CPUs.FImputation object at 0x15551383b2b0> is created
+2020-11-15 21:33:00,978 - root - INFO - Object <fencoding_CPUs.FImputation object at 0x15551383b2b0> is created
+2020-11-15 21:33:21,822 - root - INFO - Dictionary of names of columns to drop has been created: {}
+2020-11-15 21:33:21,823 - root - INFO - Initial X shape: (30000, 23)
+2020-11-15 21:33:22,043 - root - INFO - Columns were dropped, X new shape: (30000, 23)
+2020-11-15 21:33:22,163 - root - INFO - Types have been initialized.
+2020-11-15 21:33:22,163 - root - INFO - No time columns in the dataset
+2020-11-15 21:33:22,474 - root - INFO - Types have been initialized.
+2020-11-15 21:33:23,994 - root - INFO - Columns ['LIMIT_BAL', 'SEX', 'EDUCATION', 'MARRIAGE', 'AGE', 'PAY_0', 'PAY_2', 'PAY_3', 'PAY_4', 'PAY_5', 'PAY_6', 'BILL_AMT1', 'BILL_AMT2', 'BILL_AMT3', 'BILL_AMT4', 'BILL_AMT5', 'BILL_AMT6', 'PAY_AMT1', 'PAY_AMT2', 'PAY_AMT3', 'PAY_AMT4', 'PAY_AMT5', 'PAY_AMT6'] have been encoded.
+2020-11-15 21:33:24,214 - root - INFO - Types have been initialized.
+2020-11-15 21:33:24,214 - root - INFO - No numerical columns in the dataset
+2020-11-15 21:33:24,537 - root - INFO - Types have been initialized.
+2020-11-15 21:33:24,538 - root - INFO - No numerical columns in the dataset
+2020-11-15 21:33:40,262 - root - INFO - Types have been initialized.
+2020-11-15 21:33:41,865 - root - INFO - Columns ['LIMIT_BAL', 'SEX', 'EDUCATION', 'MARRIAGE', 'AGE', 'PAY_0', 'PAY_2', 'PAY_3', 'PAY_4', 'PAY_5', 'PAY_6', 'BILL_AMT1', 'BILL_AMT2', 'BILL_AMT3', 'BILL_AMT4', 'BILL_AMT5', 'BILL_AMT6', 'PAY_AMT1', 'PAY_AMT2', 'PAY_AMT3', 'PAY_AMT4', 'PAY_AMT5', 'PAY_AMT6'] have been encoded.
+2020-11-15 21:33:42,280 - root - INFO - Successfully imputed
+2020-11-15 21:33:42,283 - root - INFO - Memory usage of dataframe is 5.264404296875 MB'
+2020-11-15 21:33:42,307 - root - INFO - Memory usage after optimization is: 1.0014801025390625 MB
+2020-11-15 21:33:42,308 - root - INFO - Memory usage decreased by 80.9763831563326%
+2020-11-15 21:33:42,516 - root - INFO - Successfully saved to data/application_train_regression.csv
+2020-11-15 21:33:42,656 - root - INFO - Types have been initialized.
+2020-11-15 21:33:44,247 - root - INFO - Columns ['LIMIT_BAL', 'SEX', 'EDUCATION', 'MARRIAGE', 'AGE', 'PAY_0', 'PAY_2', 'PAY_3', 'PAY_4', 'PAY_5', 'PAY_6', 'BILL_AMT1', 'BILL_AMT2', 'BILL_AMT3', 'BILL_AMT4', 'BILL_AMT5', 'BILL_AMT6', 'PAY_AMT1', 'PAY_AMT2', 'PAY_AMT3', 'PAY_AMT4', 'PAY_AMT5', 'PAY_AMT6'] have been encoded.
+2020-11-15 21:33:44,527 - root - INFO - Successfully imputed
+2020-11-15 21:33:44,530 - root - INFO - Memory usage of dataframe is 5.264404296875 MB'
+2020-11-15 21:33:44,554 - root - INFO - Memory usage after optimization is: 1.0014801025390625 MB
+2020-11-15 21:33:44,554 - root - INFO - Memory usage decreased by 80.9763831563326%
+2020-11-15 21:33:44,756 - root - INFO - Successfully saved to data/application_train_boosting.csv
