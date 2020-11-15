@@ -458,9 +458,10 @@ class FImputation(FEncoding):
             categor_columns = [i for i in self.categor_columns if i in list(X.columns)]
             numer_columns = [i for i in self.numer_columns if i in list(X.columns)]
             for column in X.columns:
-                unique_values = np.unique(X[column][~np.isnan(X[column])])
+                unique_values = np.unique(X[column][~pd.isnull(X[column])])
                 if any(column == t for t in categor_columns):
                     X[column].fillna(int(np.median(unique_values)), inplace=True)
+                    
                 if any(column == t for t in numer_columns):
                     X[column].fillna(np.mean(unique_values), inplace=True)
             return X 
