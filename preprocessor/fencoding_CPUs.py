@@ -273,7 +273,7 @@ class FEncoding(object):
                     X.drop(columns=[column], inplace=True)
         return X      
     
-    def initialize_types(self, X):    
+    def initialize_types(self, X, return_dtype=False):    
         columns_X = list(X.columns)
         n_columns_X = len(columns_X)
         if self.chunks == None:
@@ -284,21 +284,33 @@ class FEncoding(object):
         self.categor_columns, self.numer_columns, self.time_columns = [], [], []
         return_ = mp.Pool(processes = self.n_jobs).map(self.initialize_types_, 
                                  [X[columns_X[start: start + self.chunks]] for start in range(0, n_columns_X, self.chunks)]
-                                 )
-        
+                                 )      
         for i in range(len(return_)):
             categor_columns, numer_columns, time_columns = return_[i]
             self.categor_columns += categor_columns
             self.numer_columns += numer_columns
             self.time_columns += time_columns
         
+        
+        
         logging.info(f"Types have been initialized.")
         
-        return {'categor_columns': self.categor_columns,
-                           'numer_columns': self.numer_columns,
-                           'time_columns': self.time_columns       
-         }
-    
+        out_dict =  {'categor_columns': self.categor_columns,
+                    'numer_columns': self.numer_columns,
+                    'time_columns': self.time_columns,                    
+             }
+        
+        if return_dtype:
+            out_dict.update(
+                {'categor_columns_dtypes': [str(X[self.categor_columns].dtypes.values[i]) for i in range(len(self.categor_columns))],
+                 'numer_columns_dtypes': [str(X[self.numer_columns].dtypes.values[i]) for i in range(len(self.numer_columns))],
+                 'time_columns_dtypes': [str(X[self.time_columns].dtypes.values[i]) for i in range(len(self.time_columns))],                    
+             })
+        
+        return out_dict
+  
+
+
     def bucket_numerical(self, X, 
                          n_bins=5, columns_to_buck = 'all_numerical', 
                          drop_current = False):      
@@ -392,6 +404,30 @@ class FEncoding(object):
             print('\n No time columns in the dataset')
             logging.info(f"No time columns in the dataset")
 
+        return X
+        
+    def date_replace(self, X):
+        self.initialize_types(X)
+
+        categor_columns = [i for i in self.categor_columns if i in list(X.columns)]
+        numer_columns = [i for i in self.numer_columns if i in list(X.columns)]
+        time_columns = [i for i in self.time_columns if i in list(X.columns)]
+
+        n_columns_X = len(time_columns)
+        if n_columns_X != 0:
+            if self.chunks == None:
+                while int(n_columns_X/self.n_jobs) <= 1:
+                    self.n_jobs -=1
+                self.chunks = int(n_columns_X/self.n_jobs)
+      
+            X =  pd.concat(mp.Pool(processes = self.n_jobs).map(self.date_replace_, 
+                                    [X[columns_X[start: start + self.chunks]] for start in range(0, n_columns_X, self.chunks)]
+                                    ), axis=1)  
+            print('\n time_columns:', self.initialize_types(X)['time_columns']) 
+            logging.info(f"Columns {self.initialize_types(X)['time_columns']} have been detected as date and encoded as yy-mm-dd.")
+        else:
+            print('\n No time columns in the dataset')
+            logging.info(f"No time columns in the dataset")
         return X
         
     def date_replace(self, X):
