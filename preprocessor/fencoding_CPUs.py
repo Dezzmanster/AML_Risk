@@ -153,15 +153,16 @@ class EmptyElim(object):
         '''
         self.fit(X)
         return self.transform(X)
-    
+ 
+
 class FEncoding(object):   
     def __init__(self, n_jobs = 1, chunks = None):      
-        self.categor_types = ['category', 'object', 'bool', 'int32', 'int64', 'int8']
-        self.numer_types = ['float', 'float32', 'float64']
+        self.categor_types = ['category', 'object', 'bool', 'int8', 'int16', 'int32', 'int64', 'int8']
+        self.numer_types = ['float', 'float8', 'float16', 'float32', 'float64']
         self.time_types = ['datetime64[ns]', 'datetime64[ns, tz]'] 
         # What else? https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html
         # TODO: check if there are any other time types
-
+                      
         if n_jobs == None:
             self.n_jobs = 1
         elif n_jobs == -1:
@@ -169,6 +170,9 @@ class FEncoding(object):
         else:
             self.n_jobs = n_jobs        
         self.chunks = chunks
+        
+        self.categor_columns_keep, self.numer_columns_keep = [], []
+        
         logging.info(f"Object {self} is created")
     
     def date_replace_(self, X):
@@ -273,15 +277,19 @@ class FEncoding(object):
                     X.drop(columns=[column], inplace=True)
         return X      
     
-    def initialize_types(self, X, return_dtype=False):    
+    def initialize_types(self, X, categor_columns_keep=[], numer_columns_keep=[], return_dtype=False):
+        # For other modules
+        global categor_columns_keep_, numer_columns_keep_
+        categor_columns_keep_, numer_columns_keep_ = categor_columns_keep, numer_columns_keep
+        
+        self.categor_columns_keep, self.numer_columns_keep = categor_columns_keep, numer_columns_keep      
         columns_X = list(X.columns)
         n_columns_X = len(columns_X)
         if self.chunks == None:
             while int(n_columns_X/self.n_jobs) <= 1:
                 self.n_jobs -=1
-            self.chunks = int(n_columns_X/self.n_jobs)
-        
-        self.categor_columns, self.numer_columns, self.time_columns = [], [], []
+            self.chunks = int(n_columns_X/self.n_jobs)       
+        self.categor_columns, self.numer_columns, self.time_columns = [], [], []        
         return_ = mp.Pool(processes = self.n_jobs).map(self.initialize_types_, 
                                  [X[columns_X[start: start + self.chunks]] for start in range(0, n_columns_X, self.chunks)]
                                  )      
@@ -289,17 +297,23 @@ class FEncoding(object):
             categor_columns, numer_columns, time_columns = return_[i]
             self.categor_columns += categor_columns
             self.numer_columns += numer_columns
-            self.time_columns += time_columns
+            self.time_columns += time_columns        
+        self.categor_columns += categor_columns_keep
+        self.numer_columns += numer_columns_keep       
+        if len(self.numer_columns_keep) !=0:
+            for f_n in self.numer_columns_keep:
+                if any(f_n == t for t in self.categor_columns):
+                    self.categor_columns.remove(f_n)
         
-        
-        
+        if len(self.categor_columns_keep) !=0:
+            for f_c in self.categor_columns_keep:
+                if any(f_c == t for t in self.numer_columns):
+                    self.numer_columns.remove(f_c)     
         logging.info(f"Types have been initialized.")
-        
         out_dict =  {'categor_columns': self.categor_columns,
                     'numer_columns': self.numer_columns,
                     'time_columns': self.time_columns,                    
              }
-        
         if return_dtype:
             out_dict.update(
                 {'categor_columns_dtypes': [str(X[self.categor_columns].dtypes.values[i]) for i in range(len(self.categor_columns))],
@@ -308,17 +322,17 @@ class FEncoding(object):
              })
         
         return out_dict
-  
-
 
     def bucket_numerical(self, X, 
                          n_bins=5, columns_to_buck = 'all_numerical', 
                          drop_current = False):      
         self.n_bins = n_bins
         self.columns_to_buck = columns_to_buck
-        self.drop_current = drop_current
-        self.initialize_types(X)
-
+        self.drop_current = drop_current      
+        try:
+            self.time_columns
+        except AttributeError:
+            self.initialize_types(X, self.categor_columns_keep, self.numer_columns_keep)
         categor_columns = [i for i in self.categor_columns if i in list(X.columns)]
         numer_columns = [i for i in self.numer_columns if i in list(X.columns)]
         time_columns = [i for i in self.time_columns if i in list(X.columns)]
@@ -341,18 +355,18 @@ class FEncoding(object):
         else:
             print('\n No numerical columns in the dataset')
             logging.info(f"No numerical columns in the dataset")
-
         return X
 
     
     def encode_categor(self, X, method = 'OrdinalEncoder'):
         self.method = method
-        self.initialize_types(X)
-
+        try:
+            self.time_columns
+        except AttributeError:
+            self.initialize_types(X, self.categor_columns_keep, self.numer_columns_keep)
         categor_columns = [i for i in self.categor_columns if i in list(X.columns)]
         numer_columns = [i for i in self.numer_columns if i in list(X.columns)]
         time_columns = [i for i in self.time_columns if i in list(X.columns)]
-
         n_columns_X = len(categor_columns)
         if n_columns_X != 0:
             if self.chunks == None:
@@ -371,20 +385,18 @@ class FEncoding(object):
         else:
             print('\n No categorical columns in the dataset')
             logging.info(f"No categorical columns in the dataset")
-
         return X
-
     
     def encode_time(self, X, drop_current = False):
         self.drop_current = drop_current
-        self.initialize_types(X)
-
+        try:
+            self.time_columns
+        except AttributeError:
+            self.initialize_types(X, self.categor_columns_keep, self.numer_columns_keep)
         categor_columns = [i for i in self.categor_columns if i in list(X.columns)]
         numer_columns = [i for i in self.numer_columns if i in list(X.columns)]
         time_columns = [i for i in self.time_columns if i in list(X.columns)]
-
         n_columns_X = len(time_columns)
-
         if n_columns_X != 0:
             if self.chunks == None:
                 while int(n_columns_X/self.n_jobs) <= 1:
@@ -407,12 +419,13 @@ class FEncoding(object):
         return X
         
     def date_replace(self, X):
-        self.initialize_types(X)
-
+        try:
+            self.time_columns
+        except AttributeError:
+            self.initialize_types(X, self.categor_columns_keep, self.numer_columns_keep)
         categor_columns = [i for i in self.categor_columns if i in list(X.columns)]
         numer_columns = [i for i in self.numer_columns if i in list(X.columns)]
         time_columns = [i for i in self.time_columns if i in list(X.columns)]
-
         n_columns_X = len(time_columns)
         if n_columns_X != 0:
             if self.chunks == None:
@@ -423,36 +436,13 @@ class FEncoding(object):
             X =  pd.concat(mp.Pool(processes = self.n_jobs).map(self.date_replace_, 
                                     [X[columns_X[start: start + self.chunks]] for start in range(0, n_columns_X, self.chunks)]
                                     ), axis=1)  
-            print('\n time_columns:', self.initialize_types(X)['time_columns']) 
-            logging.info(f"Columns {self.initialize_types(X)['time_columns']} have been detected as date and encoded as yy-mm-dd.")
+            print('\n time_columns:', self.time_columns) 
+            logging.info(f"Columns {self.time_columns} have been detected as date and encoded as yy-mm-dd.")
         else:
             print('\n No time columns in the dataset')
             logging.info(f"No time columns in the dataset")
         return X
-        
-    def date_replace(self, X):
-        self.initialize_types(X)
-
-        categor_columns = [i for i in self.categor_columns if i in list(X.columns)]
-        numer_columns = [i for i in self.numer_columns if i in list(X.columns)]
-        time_columns = [i for i in self.time_columns if i in list(X.columns)]
-
-        n_columns_X = len(time_columns)
-        if n_columns_X != 0:
-            if self.chunks == None:
-                while int(n_columns_X/self.n_jobs) <= 1:
-                    self.n_jobs -=1
-                self.chunks = int(n_columns_X/self.n_jobs)
-      
-            X =  pd.concat(mp.Pool(processes = self.n_jobs).map(self.date_replace_, 
-                                    [X[columns_X[start: start + self.chunks]] for start in range(0, n_columns_X, self.chunks)]
-                                    ), axis=1)  
-            print('\n time_columns:', self.initialize_types(X)['time_columns']) 
-            logging.info(f"Columns {self.initialize_types(X)['time_columns']} have been detected as date and encoded as yy-mm-dd.")
-        else:
-            print('\n No time columns in the dataset')
-            logging.info(f"No time columns in the dataset")
-        return X
+    
 
 class FImputation(FEncoding):
     '''
@@ -464,10 +454,9 @@ class FImputation(FEncoding):
     def __init__(self, model_type, fill_with_value = None, 
                   n_jobs = None, chunks = None):
         super(FImputation, self).__init__()
-        
+                
         self.model_type = model_type
         self.fill_with_value = fill_with_value
-        
         if n_jobs == None:
             self.n_jobs = 1
         elif n_jobs == -1:
@@ -475,7 +464,6 @@ class FImputation(FEncoding):
         else:
             self.n_jobs = n_jobs        
         self.chunks = chunks
-        
         logging.info(f"Object {self} is created")
 
     def impute_(self, X):
@@ -503,7 +491,7 @@ class FImputation(FEncoding):
             return X 
            
     def impute(self, X):
-        #self.initialize_types(X)
+        self.initialize_types(X, categor_columns_keep_, numer_columns_keep_)
         X = self.encode_categor(X, method = 'OrdinalEncoder')
 
         columns_X = list(X.columns)
@@ -541,8 +529,8 @@ class OutlDetect(FEncoding):
     def __init__(self, outliers_detection_technique = 'iqr_proximity_rule', n_jobs = None, 
                  chunks = None):            
         super(OutlDetect, self).__init__()
-
         self.outliers_detection_technique = outliers_detection_technique
+        
         if n_jobs == None:
             self.n_jobs = 1
         elif n_jobs == -1:
@@ -591,7 +579,7 @@ class OutlDetect(FEncoding):
         '''
         Collect information regarding self.col_outl_info - lower and upper bounds to clip outliers.
         '''
-        self.initialize_types(X)
+        self.initialize_types(X, categor_columns_keep_, numer_columns_keep_)
         categor_columns = [i for i in self.categor_columns if i in list(X.columns)]
         numer_columns = [i for i in self.numer_columns if i in list(X.columns)]
         time_columns = [i for i in self.time_columns if i in list(X.columns)]
@@ -628,7 +616,7 @@ class OutlDetect(FEncoding):
         '''
         Clip ouliers by using the dict of lower and upper bounds (self.col_outl_info).
         '''
-        self.initialize_types(X)
+        self.initialize_types(X, categor_columns_keep_, numer_columns_keep_)
         categor_columns = [i for i in self.categor_columns if i in list(X.columns)]
         numer_columns = [i for i in self.numer_columns if i in list(X.columns)]
         time_columns = [i for i in self.time_columns if i in list(X.columns)]
@@ -661,4 +649,3 @@ class OutlDetect(FEncoding):
         '''
         self.fit(X)
         return self.transform(X)
-
