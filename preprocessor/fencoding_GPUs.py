@@ -18,7 +18,11 @@ from dask.distributed import Client
 from dask.utils import parse_bytes
 from dask.delayed import delayed
 import dask.dataframe as dd
+import dask.array as da
 import rmm
+
+import dask_ml
+from dask_ml.preprocessing import OneHotEncoder
 
 import pickle
 
@@ -39,8 +43,7 @@ def set_cluster_client(n_gpus=-1, device_spill_frac=0.8):
         device_spill_frac: Spill GPU-Worker memory to host at this limit. Reduce if spilling fails to prevent device memory errors.
         '''
         if os.path.isdir("dask-worker-space"):
-            shutil.rmtree('dask-worker-space', ignore_errors=True)
-        
+            shutil.rmtree('dask-worker-space', ignore_errors=True)       
         # Deploy a Single-Machine Multi-GPU Cluster
         if n_gpus == -1:
             nvidia_smi.nvmlInit()
@@ -51,15 +54,13 @@ def set_cluster_client(n_gpus=-1, device_spill_frac=0.8):
         visible_devices = [i for i in list(range(n_gpus))]
         visible_devices = str(visible_devices)[1:-1]
         #print('visible_devices: {}'.format(visible_devices))
-        
-        
+            
         #TODO: how to reinitialzed cluster
         cluster = LocalCUDACluster(
             protocol = "tcp", # "tcp" or "ucx"
             CUDA_VISIBLE_DEVICES = visible_devices,
             device_memory_limit = device_spill_frac * device_mem_size(kind="total"),
-        )
-        
+        )       
         try: 
             # Create the distributed client
             client = Client(cluster)
@@ -73,25 +74,23 @@ def set_cluster_client(n_gpus=-1, device_spill_frac=0.8):
                 )         
             client.run(_rmm_pool)
             return client
-        
         except MemoryError:
             print('\n The client is already initialized')
             print('TODO: memory reallocation')
             
 
 class FEncoding_advanced(object):   
-    def __init__(self, client, rest_col_names=[], y_names=[], filename=None):        
+    def __init__(self, client, rest_col_names=[], y_names=[], cat_groups=[], filename=None):        
         self.filename = filename
         self.rest_col_names = rest_col_names
         self.y_names = y_names
+        self.categor_col_to_encode = cat_groups
         self.n_gpus = len(client.nthreads())
         self.client = client
         self.output_path="./parquet_data_tmp"
-        self.categor_types = ['category', 'object', 'bool', 'int32', 'int64', 'int8']
-        self.numer_types = ['float', 'float32', 'float64']
-        self.time_types = ['datetime64[ns]', 'datetime64[ns, tz]'] 
-        # What else? https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html
-        # TODO: check if there are any other time types
+        self.categor_types = ['category', 'object', 'bool', 'int8', 'int16', 'int32', 'int64', 'int8']
+        self.numer_types = ['float', 'float8', 'float16', 'float32', 'float64']
+        self.time_types = ['datetime64[ns]', 'datetime64[ns, tz]']
         
     def elim_empty_columns(self, X, save_to_csv = False):
         # GPU version
@@ -117,15 +116,11 @@ class FEncoding_advanced(object):
         self.categor_columns, self.numer_columns, self.time_columns = [], [], []
         # Sometimes categorical feature can be presented with a float type. Let's check for that
         f_columns_names =[x for x in list(X.columns)  if x not in self.rest_col_names + self.y_names]
-
         for column in f_columns_names:
             c_type = str(X[column].dtype) 
-
             if any(c_type == t for t in self.numer_types):
-
                 uvs = cp.array(X[column].unique().compute())
                 unique_values = list(uvs[~cp.isnan(uvs)])
-
                 if cp.array([el.item().is_integer() for el in unique_values]).sum() == len(unique_values):
                     #print('\n {} has type {} and number of unique values: {}, will be considered as a categorical \n'.format(column, c_type, len(unique_values)))
                     #logging.info(f"{column} has type {c_type} and number of unique values: {len(unique_values)}, will be considered as a categorical")
@@ -180,66 +175,92 @@ class FEncoding_advanced(object):
                 extrim_values[columns_names[i]] = cp.unique(extrvalar[i,:])[0].item()            
         if f_type == 'categor_columns':
             for column in columns_names:
-                extrim_values[column] = X[column].value_counts().compute().index[-1]  
+                if len(X[column].unique().compute().values) <= 2:
+                    pass
+                else:
+                    extrim_values[column] = X[column].value_counts().compute().index[-1]  
         return extrim_values
     
-    def processing(self, X, 
-                   encode_categor_type = 'categorify',# 'onehotencoding',
-                   outliers_detection_technique = 'iqr_proximity_rule', 
-                   #'gaussian_approximation','quantiles'
-                   fill_with_value = 'extreme_values',
-                   #'zeros','mean-median'
+    def processing(self, X_pd, 
+                   encode_categor_type = None, 
+                   #'categorify', 'onehotencoding',
+                   outliers_detection_technique = None,
+                   #'iqr_proximity_rule', 'gaussian_approximation','quantiles'
+                   fill_with_value = None,
+                   #'extreme_values', 'zeros','mean-median'
                    targetencoding = False,
                    save_to_csv = False,
                   ):
-        X = dd.from_pandas(X, npartitions=self.n_gpus)
+        global X_cat_encoded
+        X = dd.from_pandas(X_pd, npartitions=self.n_gpus)
+        X=X.replace(np.nan, None)
         self.initialize_types(X)      
         workflow = nvt.Workflow(cat_names=self.categor_columns, 
                         cont_names=self.numer_columns,
                         label_name=self.y_names,
-                        client=self.client                       )
+                        client=self.client)
         # Operators: https://nvidia.github.io/NVTabular/main/api/ops/index.html      
         # Categorify https://nvidia.github.io/NVTabular/main/api/ops/categorify.html
         if encode_categor_type == 'categorify':
             if len(self.categor_columns) != 0:
                 workflow.add_preprocess(
-                    ops.Categorify(columns = self.categor_columns, out_path='./data/')                )
+                    ops.Categorify(columns = self.categor_columns, out_path='./data/'))
         
         if encode_categor_type == 'onehotencoding':
-            #TODO: FIX the BUG!
-            X_cat_encoded = OneHotEncoder().fit_transform(X[self.categor_columns].to_dask_array(lengths=True))
-#            display(X_cat_encoded)
-
+            #OneHotEncoder().get_feature_names(input_features=<list of features encoded>) does not work
             #lengths=True - chunk sizes can be computed
-            X = X.drop(self.categor_columns, axis=1)
-            X = X.append(dd.io.from_dask_array(X_cat_encoded))          
-            display(X)
-            print(type(X))
-            self.initialize_types(X)            
+            for column in self.categor_columns:
+                #X[column] = X[column].astype(str)
+                X_cat_encoded = OneHotEncoder().fit_transform(X[column].to_dask_array(lengths=True).reshape(-1,1))
+                uvs = X[column].unique().compute().values
+                X = X.drop([column], axis=1)
+                X_cat_encoded = dd.from_array(X_cat_encoded.compute().todense())
+                X_cat_encoded.columns = [column + '_{}'.format(uv) for uv in uvs]
+                X = dd.concat([X,X_cat_encoded], axis=1)
+                X = X.repartition(npartitions=2)    
+            for column in X.columns:
+                if any(str(column)[-4:] == t for t in ['_nan', 'None']): # What else?
+                    X = X.drop([column], axis=1)
+                
+            self.initialize_types(X)
+            print('Retyping:', self.initialize_types(X))
+            # Reinitialize workflow
+            workflow = nvt.Workflow(cat_names=self.categor_columns, 
+                cont_names=self.numer_columns,
+                label_name=self.y_names,
+                client=self.client)
 
         # OutlDetect https://nvidia.github.io/NVTabular/main/api/ops/clip.html
-        if len(self.numer_columns) != 0:
+        if (len(self.numer_columns) != 0) and (outliers_detection_technique != None):
             lower, upper = self.outldetect(outliers_detection_technique, X[self.numer_columns])
             for i in range(len(self.numer_columns)):
+                print('column: {}, lower: {}, upper: {}'.format(self.numer_columns[i], lower[i], upper[i]))
                 workflow.add_preprocess(
-                    ops.Clip(min_value=lower[i], max_value=upper[i], columns=[self.numer_columns[i]])                )
+                    ops.Clip(min_value=lower[i], max_value=upper[i], columns=[self.numer_columns[i]])
+                )
         # FillMissing https://nvidia.github.io/NVTabular/main/api/ops/fillmissing.html
         if fill_with_value == 'zeros':
             workflow.add_preprocess(
-                ops.FillMissing(fill_val=0, columns=self.categor_columns + self.numer_columns)            )        
+                ops.FillMissing(fill_val=0, columns=self.categor_columns + self.numer_columns)) 
+            
         if fill_with_value == 'extreme_values':
             extrim_values = {}
             if len(self.numer_columns) != 0:
                 extrim_values.update(self.extrvalsdetect(X[self.numer_columns], 'numer_columns'))
+                
             if len(self.categor_columns) != 0:
                 extrim_values.update(self.extrvalsdetect(X[self.categor_columns], 'categor_columns'))    
             print('\n extrim_values:', extrim_values)
+            
             output = open('./data/' + 'extrim_values', 'wb')
             pickle.dump(extrim_values, output)
             output.close()
+            
             for fill_val, column in zip(list(extrim_values.values()), list(extrim_values.keys())):
+                print(fill_val, column)
                 workflow.add_preprocess(
-                    ops.FillMissing(fill_val=fill_val, columns=[column])                )
+                    ops.FillMissing(fill_val=fill_val, columns=[column]))
+                
         if fill_with_value == 'mean-median':
             if len(self.categor_columns) != 0:              
                 workflow.add_preprocess(
@@ -249,23 +270,34 @@ class FEncoding_advanced(object):
                                             npartitions=self.n_gpus).mean().compute().values)
                 for fill_val, column in zip(means, self.numer_columns):
                     workflow.add_preprocess(
-                        ops.FillMissing(fill_val=fill_val, columns=[column])                    )
+                        ops.FillMissing(fill_val=fill_val, columns=[column]))
                     
         if targetencoding:
-            print('\n TODO: targetencoding')
             #https://nvidia.github.io/NVTabular/main/api/ops/targetencoding.html
+            if len(self.y_names) != 0:
+                if len(self.cat_groups) == 0: 
+                    print('\n Target encoding will be applied to all categorical columns')
+                    workflow.add_preprocess(
+                        ops.TargetEncoding(cat_groups = self.categor_columns,
+                                            cont_target = self.y_names)
+                    )
+                else:
+                    workflow.add_preprocess(
+                        ops.TargetEncoding(cat_groups = self.cat_groups,
+                                            cont_target = self.y_names)
+                    )                                 
 
-        
-        #######################################################        
+        #######################################################             
         workflow.finalize()
         dataset = nvt.Dataset(X)
+
         tmp_output_path="./parquet_data_tmp"
         workflow.apply(
              dataset,
              output_format="parquet",
              output_path=tmp_output_path,
              shuffle=Shuffle.PER_WORKER,  # Shuffle algorithm
-             out_files_per_proc=8, # Number of output files per worker
+             out_files_per_proc=1, # Number of output files per worker
              )
         files = glob.glob(tmp_output_path + "/*.parquet")
         X_final = cudf.read_parquet(files[0])
