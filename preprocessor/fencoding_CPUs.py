@@ -160,9 +160,7 @@ class FEncoding(object):
         self.categor_types = ['category', 'object', 'bool', 'int8', 'int16', 'int32', 'int64', 'int8']
         self.numer_types = ['float', 'float8', 'float16', 'float32', 'float64']
         self.time_types = ['datetime64[ns]', 'datetime64[ns, tz]'] 
-        # What else? https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html
-        # TODO: check if there are any other time types
-                      
+
         if n_jobs == None:
             self.n_jobs = 1
         elif n_jobs == -1:
@@ -198,10 +196,10 @@ class FEncoding(object):
         for column in X.columns:
             x = pars_date(X[column])
             try: 
-              x.nunique()
-              X[column] = x
+                x.nunique()
+                X[column] = x
             except AttributeError:
-              pass
+                pass
         return X
 
     def initialize_types_(self, X):
@@ -210,8 +208,10 @@ class FEncoding(object):
         for column in X.columns:
             c_type = str(X[column].dtype) 
             if any(c_type == t for t in self.numer_types):
-                unique_values = list(np.unique(X[column][~np.isnan(X[column])]))
-                if np.array([el.item().is_integer() for el in unique_values]).sum() == len(unique_values):
+                #unique_values = list(np.unique(X[column][~np.isnan(X[column])]))
+                unique_values = list(X[column].value_counts().index)
+                #if np.array([el.item().is_integer() for el in unique_values]).sum() == len(unique_values):
+                if np.array([el.is_integer() for el in unique_values]).sum() == len(unique_values):
                     #print('\n {} has type {} and number of unique values: {}, will be considered as a categorical \n'.format(column, c_type, len(unique_values)))
                     logging.info(f"{column} has type {c_type} and number of unique values: {len(unique_values)}, will be considered as a categorical")
                     self.categor_columns.append(column)
@@ -400,7 +400,7 @@ class FEncoding(object):
         if n_columns_X != 0:
             if self.chunks == None:
                 while int(n_columns_X/self.n_jobs) <= 1:
-                  self.n_jobs -=1
+                    self.n_jobs -=1
                 self.chunks = int(n_columns_X/self.n_jobs)
 
             X_time =  pd.concat(mp.Pool(processes = self.n_jobs).map(self.encode_time_, 
@@ -552,9 +552,9 @@ class OutlDetect(FEncoding):
     
     def replace(self, X):
         for column in X.columns:
-          x = X[column]
-          lower, upper = self.col_outl_info[column]
-          X[column] = np.where(x > upper, upper, np.where(x < lower, lower, x))
+            x = X[column]
+            lower, upper = self.col_outl_info[column]
+            X[column] = np.where(x > upper, upper, np.where(x < lower, lower, x))
         return X
     
     def gaussian_approximation(self, X):
