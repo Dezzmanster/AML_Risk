@@ -36,6 +36,12 @@ import nvtabular.ops as ops
 from nvtabular.io import Shuffle
 from nvtabular.utils import device_mem_size
 
+import logging.config
+import logging
+import warnings
+warnings.filterwarnings('ignore')
+#logging.config.fileConfig(fname='logger.ini', defaults={'logfilename': 'logfile.log'})
+
 def set_cluster_client(n_gpus=-1, device_spill_frac=0.8):
         # TODO: Check for any solution. If user calls this function, for the second call the correct recreation will fail. 
         # New cluster can be created after 'kernel restart' procedure.
@@ -76,80 +82,93 @@ def set_cluster_client(n_gpus=-1, device_spill_frac=0.8):
             return client
         except MemoryError:
             print('\n The client is already initialized')
-            print('TODO: memory reallocation')
             
 
 class FEncoding_advanced(object):   
-    def __init__(self, client, rest_col_names=[], y_names=[], cat_groups=[], filename=None):        
-        self.filename = filename
-        self.rest_col_names = rest_col_names
-        self.y_names = y_names
-        self.categor_col_to_encode = cat_groups
+    def __init__(self, client, rest_col_names=[]):        
         self.n_gpus = len(client.nthreads())
         self.client = client
+        self.rest_col_names=rest_col_names
         self.output_path="./parquet_data_tmp"
         self.categor_types = ['category', 'object', 'bool', 'int8', 'int16', 'int32', 'int64', 'int8']
         self.numer_types = ['float', 'float8', 'float16', 'float32', 'float64']
         self.time_types = ['datetime64[ns]', 'datetime64[ns, tz]']
+        logging.info(f"Object {self} is created")
         
-    def elim_empty_columns(self, X, save_to_csv = False):
+    def elim_empty_columns(self, X, file_path=None):
         # GPU version
         if type(X) == pd.core.frame.DataFrame:
             X = dd.from_pandas(X, npartitions=self.n_gpus)
-        cols_to_drop = []
+        cols_to_drop = {}
         for column in X.columns:
-            if len(X[column].unique().compute().values) < 2:
-                cols_to_drop.append(column)
-        print('\n dropped columns:', cols_to_drop)
-        X_final = X.drop(cols_to_drop, axis=1).compute()
-        if save_to_csv:
-            if self.filename is not None:
-                X_final.to_csv('./data/' + self.filename, index=False)
-            else:
-                print('Identify filename when initializing the class!')
-        return X_final
+            unique_values = X[column].unique().compute().values
+            if len(unique_values) < 2:
+                cols_to_drop = list(cols_to_drop.keys())
+        print('\n columns to drop:', cols_to_drop)
+        X = X.drop(cols_to_drop, axis=1).compute()
+        if file_path is not None:
+            X.to_csv(file_path, index=False)
+        logging.info(f"Columns were dropped, X new shape: {X.shape}")
+        return X
     
-    def initialize_types(self, X, return_dtype=False, save_to_pkl = False, dict_name = 'out_dict.pkl'):
+    def initialize_types(self, X, n_unique_val_th=50, categor_columns_keep=[], numer_columns_keep=[],
+                         return_dtype=False, file_name=None):
+        # For other modules
+        global n_unique_val_th_, categor_columns_keep_, numer_columns_keep_
+        n_unique_val_th_, categor_columns_keep_, numer_columns_keep_ = n_unique_val_th, categor_columns_keep, numer_columns_keep
+        
         # GPU version
         if type(X) == pd.core.frame.DataFrame:
-            X = dd.from_pandas(X, npartitions=self.n_gpus)       
+            X = dd.from_pandas(X, npartitions=self.n_gpus)
+            
         self.categor_columns, self.numer_columns, self.time_columns = [], [], []
-        # Sometimes categorical feature can be presented with a float type. Let's check for that
-        f_columns_names =[x for x in list(X.columns)  if x not in self.rest_col_names + self.y_names]
+        f_columns_names =[x for x in list(X.columns)  if x not in self.rest_col_names]
         for column in f_columns_names:
-            c_type = str(X[column].dtype) 
+            c_type = str(X[column].dtype)
+            unique_values = list(X[column].value_counts().index.compute())
             if any(c_type == t for t in self.numer_types):
-                uvs = cp.array(X[column].unique().compute())
-                unique_values = list(uvs[~cp.isnan(uvs)])
-                if cp.array([el.item().is_integer() for el in unique_values]).sum() == len(unique_values):
-                    #print('\n {} has type {} and number of unique values: {}, will be considered as a categorical \n'.format(column, c_type, len(unique_values)))
-                    #logging.info(f"{column} has type {c_type} and number of unique values: {len(unique_values)}, will be considered as a categorical")
+                if cp.array([el.is_integer() for el in unique_values]).sum() == len(unique_values):
+                    logging.info(f"{column} has type {c_type} and number of unique values: {len(unique_values)}, will be considered as categorical")
                     self.categor_columns.append(column)
                 else:
                     self.numer_columns.append(column)
-            if any(c_type == t for t in self.categor_types):
-                self.categor_columns.append(column)
-            if any(c_type == t for t in self.time_types):
+            elif any(c_type == t for t in self.categor_types):
+                if len(unique_values) >= n_unique_val_th:
+                    self.numer_columns.append(column)
+                    logging.info(f"{column} has type {c_type} and number of unique values: {len(unique_values)}, will be considered as numerical")
+                else:
+                    self.categor_columns.append(column)
+            elif any(c_type == t for t in self.time_types):
                 self.time_columns.append(column)                             
         out_dict =  {'categor_columns': self.categor_columns,
                 'numer_columns': self.numer_columns,
                 'time_columns': self.time_columns,                    
          }
+        self.categor_columns += categor_columns_keep
+        self.numer_columns += numer_columns_keep
+        self.categor_columns = list(set(self.categor_columns))
+        self.numer_columns = list(set(self.numer_columns))
+        self.time_columns = list(set(self.time_columns))
+        if len(numer_columns_keep) != 0:
+            for f_n in numer_columns_keep:
+                if any(f_n == t for t in self.categor_columns):
+                    self.categor_columns.remove(f_n)
+        if len(categor_columns_keep) != 0:
+            for f_c in categor_columns_keep:
+                if any(f_c == t for t in self.numer_columns):
+                    self.numer_columns.remove(f_c)
+        logging.info(f"Types have been initialized.")
         if return_dtype:
             out_dict.update(
                 {'categor_columns_dtypes': [str(X[self.categor_columns].dtypes.values[i]) for i in range(len(self.categor_columns))],
                  'numer_columns_dtypes': [str(X[self.numer_columns].dtypes.values[i]) for i in range(len(self.numer_columns))],
                  'time_columns_dtypes': [str(X[self.time_columns].dtypes.values[i]) for i in range(len(self.time_columns))],                    
              })            
-        if save_to_pkl:
-            output = open('./data/' + dict_name, 'wb')
+        if file_name != None:
+            output = open(file_name, 'wb')
             pickle.dump(out_dict, output)
             output.close()
         return out_dict
-    
-    def date_replace(self, X, save_to_csv = False):
-        # GPU version
-        return X
     
     def outldetect(self, outliers_detection_technique, X_num):
         # GPU version
@@ -181,7 +200,7 @@ class FEncoding_advanced(object):
                     extrim_values[column] = X[column].value_counts().compute().index[-1]  
         return extrim_values
     
-    def processing(self, X_pd, 
+    def processing(self, X_pd, y_names = [],
                    encode_categor_type = None, 
                    #'categorify', 'onehotencoding',
                    outliers_detection_technique = None,
@@ -189,22 +208,29 @@ class FEncoding_advanced(object):
                    fill_with_value = None,
                    #'extreme_values', 'zeros','mean-median'
                    targetencoding = False,
-                   save_to_csv = False,
+                   file_path=None,
                   ):
-        global X_cat_encoded
         X = dd.from_pandas(X_pd, npartitions=self.n_gpus)
-        X=X.replace(np.nan, None)
-        self.initialize_types(X)      
+        X=X.replace(np.nan, None)        
+        try:
+            self.time_columns
+        except AttributeError:
+            try:
+                self.initialize_types(X, n_unique_val_th = n_unique_val_th_,
+                              categor_columns_keep = categor_columns_keep_, numer_columns_keep = numer_columns_keep_)
+            except NameError:
+                self.initialize_types(X)
+        
         workflow = nvt.Workflow(cat_names=self.categor_columns, 
                         cont_names=self.numer_columns,
-                        label_name=self.y_names,
+                        label_name=y_names,
                         client=self.client)
         # Operators: https://nvidia.github.io/NVTabular/main/api/ops/index.html      
         # Categorify https://nvidia.github.io/NVTabular/main/api/ops/categorify.html
         if encode_categor_type == 'categorify':
             if len(self.categor_columns) != 0:
                 workflow.add_preprocess(
-                    ops.Categorify(columns = self.categor_columns, out_path='./data/'))
+                    ops.Categorify(columns = self.categor_columns, out_path='./'))
         
         if encode_categor_type == 'onehotencoding':
             #OneHotEncoder().get_feature_names(input_features=<list of features encoded>) does not work
@@ -227,17 +253,19 @@ class FEncoding_advanced(object):
             # Reinitialize workflow
             workflow = nvt.Workflow(cat_names=self.categor_columns, 
                 cont_names=self.numer_columns,
-                label_name=self.y_names,
+                label_name=y_names,
                 client=self.client)
 
         # OutlDetect https://nvidia.github.io/NVTabular/main/api/ops/clip.html
         if (len(self.numer_columns) != 0) and (outliers_detection_technique != None):
             lower, upper = self.outldetect(outliers_detection_technique, X[self.numer_columns])
             for i in range(len(self.numer_columns)):
-                print('column: {}, lower: {}, upper: {}'.format(self.numer_columns[i], lower[i], upper[i]))
+                logging.info(f'column: {self.numer_columns[i]}, lower: {lower[i]}, upper: {upper[i]}')
+                print(f'column: {self.numer_columns[i]}, lower: {lower[i]}, upper: {upper[i]}')
                 workflow.add_preprocess(
                     ops.Clip(min_value=lower[i], max_value=upper[i], columns=[self.numer_columns[i]])
                 )
+                
         # FillMissing https://nvidia.github.io/NVTabular/main/api/ops/fillmissing.html
         if fill_with_value == 'zeros':
             workflow.add_preprocess(
@@ -249,15 +277,14 @@ class FEncoding_advanced(object):
                 extrim_values.update(self.extrvalsdetect(X[self.numer_columns], 'numer_columns'))
                 
             if len(self.categor_columns) != 0:
-                extrim_values.update(self.extrvalsdetect(X[self.categor_columns], 'categor_columns'))    
-            print('\n extrim_values:', extrim_values)
+                extrim_values.update(self.extrvalsdetect(X[self.categor_columns], 'categor_columns'))
+            logging.info(f'extrim_values: {extrim_values}')
             
-            output = open('./data/' + 'extrim_values', 'wb')
+            output = open('extrim_values', 'wb')
             pickle.dump(extrim_values, output)
             output.close()
             
             for fill_val, column in zip(list(extrim_values.values()), list(extrim_values.keys())):
-                print(fill_val, column)
                 workflow.add_preprocess(
                     ops.FillMissing(fill_val=fill_val, columns=[column]))
                 
@@ -279,15 +306,12 @@ class FEncoding_advanced(object):
                     print('\n Target encoding will be applied to all categorical columns')
                     workflow.add_preprocess(
                         ops.TargetEncoding(cat_groups = self.categor_columns,
-                                            cont_target = self.y_names)
-                    )
+                                            cont_target = self.y_names))
                 else:
                     workflow.add_preprocess(
                         ops.TargetEncoding(cat_groups = self.cat_groups,
-                                            cont_target = self.y_names)
-                    )                                 
-
-        #######################################################             
+                                            cont_target = self.y_names))                                 
+        #-----------------------------------------------------------------------------------------           
         workflow.finalize()
         dataset = nvt.Dataset(X)
 
@@ -304,11 +328,11 @@ class FEncoding_advanced(object):
         for i in range(1, len(files)):    
             X_final = X_final.append(cudf.read_parquet(files[i]))      
         # Delete temporary files
-        shutil.rmtree(tmp_output_path, ignore_errors=True)       
-        if save_to_csv:
-            try:
-                X_final.to_csv('./data/' + self.filename, index=False)
-            except TypeError:
-                print('Initialize filename!')
+        shutil.rmtree(tmp_output_path, ignore_errors=True)
+#         if len(self.rest_col_names) != 0:
+#             print(1)
+#             X_final = pd.concat([X_final.to_pandas(), X_pd[self.rest_col_names]], axis=1)
+        if file_path is not None:
+            X_final.to_csv(file_path, index=False)
         return X_final 
             
